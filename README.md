@@ -3,6 +3,7 @@
 > This is a fork of [mengqimusic/Wingie2](https://github.com/mengqimusic/Wingie2)
 > with an experimental dual asynchronous looper feature. See
 > [Dual Looper documentation](DUAL_LOOPER.md) for controls, MIDI, audio format, and build notes.
+> This is unofficial firmware: use it at your own risk.
 
 ![Wingie2 Front Small](https://user-images.githubusercontent.com/4593629/158756306-aa6c1218-f6ec-44c0-8c54-b04b49531801.jpg)
 
