@@ -7,6 +7,10 @@
 > To flash the current release, open the [standalone web flasher](https://github.com/becks/Wingie2-looper/releases/download/v4.30-duallooper.1/Wingie2-v4.30-duallooper.1.standalone.html)
 > in desktop Chrome or Edge.
 
+## Dual Looper quick controls
+
+![Dual Looper control combinations](doc/images/dual-looper-controls.png)
+
 ![Wingie2 Front Small](https://user-images.githubusercontent.com/4593629/158756306-aa6c1218-f6ec-44c0-8c54-b04b49531801.jpg)
 
 [**如何建立编程环境**](https://github.com/mengqimusic/Wingie2#中文)（适用于想更改或编写固件的人，如果只想重刷固件请见右侧 Releases）
