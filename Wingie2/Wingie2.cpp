@@ -1283,6 +1283,7 @@ class esp32audio : public audio {
         template <int INPUTS, int OUTPUTS>
         void audioTask()
         {
+            uint16_t idle_window_counter = 0;
             while (fRunning) {
                 if (INPUTS > 0) {
                     // Read from the card
@@ -1327,6 +1328,17 @@ class esp32audio : public audio {
                 // Write to the card
                 size_t bytes_written = 0;
                 i2s_write((i2s_port_t)0, &samples_data_out, AUDIO_MAX_CHAN*sizeof(float)*fBufferSize, &bytes_written, portMAX_DELAY);
+
+                // When DSP work consumes the full block interval, the I2S calls can
+                // return immediately forever and starve CPU0's watchdog-monitored
+                // IDLE task. Three DMA buffers provide enough margin for this short,
+                // periodic scheduler window without changing the audio block size.
+                // At 1024 blocks this is about 1.49 s: safely below the observed
+                // watchdog limit, while avoiding a frequent one-tick audio pause.
+                if (++idle_window_counter == 1024) {
+                    idle_window_counter = 0;
+                    vTaskDelay(1);
+                }
             }
             
             // Task has to deleted itself beforee returning
@@ -14223,6 +14235,8 @@ list<GUI*> GUI::fGuiList;
 ztimedmap GUI::gTimedZoneMap;
 #endif
 
+ #include "looper_dsp.h"
+
 Wingie2::Wingie2(int sample_rate, int buffer_size)
 {
 #ifdef NVOICES
@@ -14232,6 +14246,7 @@ Wingie2::Wingie2(int sample_rate, int buffer_size)
     fDSP = new mydsp();
 #endif
     
+    fDSP = new LooperDSP(fDSP);
     fUI = new MapUI();
     fDSP->buildUserInterface(fUI);
     
@@ -14269,6 +14284,7 @@ bool Wingie2::start()
 #ifdef MIDICTRL
     if (!fMIDIInterface->run()) return false;
 #endif
+    static_cast<LooperDSP*>(fDSP)->allocate();
     return fAudio->start();
 }
 
@@ -14322,3 +14338,7 @@ extern "C" void app_main()
 /********************END ARCHITECTURE SECTION (part 2/2)****************/
 
 #endif
+
+void Wingie2::setLooperControl(int ch, int cc, int value) {
+    static_cast<LooperDSP*>(fDSP)->control(ch, cc, value);
+}

@@ -1,5 +1,50 @@
 #include "device_state.h"
 
+void looperPanelCommand(byte ch, byte keyIndex) {
+  looperPanelGesture = true;
+  save_routine_flag = false;
+
+  static const byte commands[4] = {1, 2, 3, 0};
+  static const char *names[4] = {"record", "play", "overdub", "bypass"};
+  static const byte colors[4] = {2, 0, 3, 1};
+  if (keyIndex < 4) {
+    dsp.setLooperControl(ch, 80, commands[keyIndex]);
+    led_blink = 3;
+    led_blink_color = ledColor[colors[keyIndex]];
+    led_flash_timer = currentMillis;
+    Serial.printf("LOOPER_PANEL ch=%u command=%s\n", ch + 1, names[keyIndex]);
+  } else if (keyIndex == 4) {
+    looperClearArmed[ch] = true;
+    looperClearStarted[ch] = currentMillis;
+    Serial.printf("LOOPER_PANEL ch=%u clear_armed=1\n", ch + 1);
+  } else if (keyIndex >= 5 && keyIndex <= 7) {
+    static const byte speedValues[3] = {0, 64, 127};
+    static const char *speedNames[3] = {"0.5x", "1x", "2x"};
+    byte speedIndex = keyIndex - 5;
+    dsp.setLooperControl(ch, 81, speedValues[speedIndex]);
+    led_blink = 3;
+    led_blink_color = ledColor[speedIndex == 0 ? 1 : speedIndex == 1 ? 0 : 3];
+    led_flash_timer = currentMillis;
+    Serial.printf("LOOPER_PANEL ch=%u speed=%s\n", ch + 1, speedNames[speedIndex]);
+  } else if (keyIndex == 8 || keyIndex == 10) {  // G# down, A#/Bb up
+    int level = looperLevel[ch] + (keyIndex == 8 ? -8 : 8);
+    looperLevel[ch] = constrain(level, 0, 127);
+    dsp.setLooperControl(ch, 82, looperLevel[ch]);
+    led_blink = 2;
+    led_blink_color = ledColor[keyIndex == 8 ? 1 : 0];
+    led_flash_timer = currentMillis;
+    Serial.printf("LOOPER_PANEL ch=%u level=%u%%\n", ch + 1,
+                  (unsigned)((looperLevel[ch] * 100 + 63) / 127));
+  } else if (keyIndex == 11) {  // B
+    looperReverse[ch] = !looperReverse[ch];
+    dsp.setLooperControl(ch, 85, looperReverse[ch] ? 127 : 0);
+    led_blink = 3;
+    led_blink_color = ledColor[looperReverse[ch] ? 3 : 0];
+    led_flash_timer = currentMillis;
+    Serial.printf("LOOPER_PANEL ch=%u reverse=%s\n", ch + 1, looperReverse[ch] ? "on" : "off");
+  }
+}
+
 void control(void *pvParameters) {
   Serial.print("control running on core ");
   Serial.println(xPortGetCoreID());
@@ -590,7 +635,7 @@ void control(void *pvParameters) {
           if (!modeButtonPressed[ch]) controlActivity.modeButton[ch]++;
           modeButtonPressed[ch] = true;
         } else if (modeButtonState[ch]) {
-          if (modeButtonPressed[ch] && !threshChanged[ch] && !stuff_saved) modeChangingFromKeys[ch] = true;
+          if (modeButtonPressed[ch] && !threshChanged[ch] && !stuff_saved && !looperPanelGesture) modeChangingFromKeys[ch] = true;
           threshChanged[ch] = false;
           modeButtonPressed[ch] = false;
         }
@@ -607,7 +652,13 @@ void control(void *pvParameters) {
             if (!key[ch][i]) {
               controlActivity.key[ch][i]++;
 
-              if (modeButtonPressed[0]) {  // Change threshold
+              if (!modeButtonState[0] && !modeButtonState[1]) {
+                // Both Mode buttons select the panel looper layer. Commands are
+                // independent for the left and right mini keyboards.
+                looperPanelCommand(ch, i);
+              }
+
+              else if (modeButtonPressed[0]) {  // Change threshold
                 threshChanged[0] = true;
                 if (!ch) {
                   left_thresh = 0.0825 * i + 0.0825;
@@ -700,6 +751,7 @@ void control(void *pvParameters) {
             }    // Key Press Action End
 
             else {  // Key Release Action Start
+              if (i == 4) looperClearArmed[ch] = false;
               if (!allKeys[ch]) firstPress[ch] = true;
               //if (!ch) dsp.setParamValue("/Wingie/left/mode_changed", 0);
               //if (ch) dsp.setParamValue("/Wingie/right/mode_changed", 0);
@@ -710,13 +762,29 @@ void control(void *pvParameters) {
       }
     }
 
+    // Clear requires a deliberate one-second hold on E while both Mode buttons
+    // remain down. Never print or mutate the looper from the audio task.
+    for (int ch = 0; ch < 2; ch++) {
+      if (!looperClearArmed[ch]) continue;
+      if (modeButtonState[0] || modeButtonState[1] || key[ch][4]) {
+        looperClearArmed[ch] = false;
+      } else if (currentMillis - looperClearStarted[ch] >= LOOPER_CLEAR_HOLD_MS) {
+        looperClearArmed[ch] = false;
+        dsp.setLooperControl(ch, 80, 4);
+        led_blink = 5;
+        led_blink_color = ledColor[2];
+        led_flash_timer = currentMillis;
+        Serial.printf("LOOPER_PANEL ch=%u command=clear\n", ch + 1);
+      }
+    }
+
     //
     // cave mode adjusting
     //
     for (int ch = 0; ch < 2; ch++) {
       int cave = oct[ch] + 1;
 
-      if (Mode[ch] == CAVE_MODE) {
+      if (Mode[ch] == CAVE_MODE && !looperPanelGesture) {
 
         if (!key[ch][4] or !key[ch][5]) {
           int adj[2];
@@ -775,7 +843,7 @@ void control(void *pvParameters) {
     //
     // save routine
     //
-    if (modeButtonPressed[0] && modeButtonPressed[1] && !save_routine_flag && !stuff_saved) {
+    if (modeButtonPressed[0] && modeButtonPressed[1] && !save_routine_flag && !stuff_saved && !looperPanelGesture) {
       save_routine_flag = true;
       save_routine_timer = currentMillis;
       led_flash_timer = currentMillis;
@@ -785,6 +853,9 @@ void control(void *pvParameters) {
     if (!modeButtonPressed[0] && !modeButtonPressed[1]) {
       save_routine_flag = false;
       stuff_saved = false;
+      looperPanelGesture = false;
+      looperClearArmed[0] = false;
+      looperClearArmed[1] = false;
     }
 
     if (save_routine_flag) {

@@ -146,6 +146,10 @@ int note[2], currentNote[2] = {36, 36}, octPrev[2], oct[2], allKeys[2] = {0, 0},
 // Mode 由 control 任务（模式键递增）与 loop 任务（MIDI CC / 网页 set_param）共同读写
 volatile int Mode[2] = {POLY_MODE, POLY_MODE};
 bool modeButtonState[2], modeButtonPressed[2], duck_env_triggered[2] = {false, false};
+bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
+bool looperReverse[2] = {false, false};
+uint8_t looperLevel[2] = {127, 127};
+unsigned long looperClearStarted[2] = {0, 0};
 // 模式切换标志：keys 侧仅 control 任务，MIDI 侧由 loop 任务挂起、control 任务原子消费
 volatile bool modeChangingFromKeys[2] = {false, false}, modeChangingFromMIDI[2] = {false, false};
 bool octButtonPrev[2][2] = {{true, true}, {true, true}};
@@ -272,6 +276,7 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define LED_FLASH_INTERVAL 250
 #define RATIO_LED_INTERVAL 500
 #define SAVE_DELAY 3000
+#define LOOPER_CLEAR_HOLD_MS 1000
 unsigned long save_routine_timer, led_flash_timer, ratio_led_timer[2] = {0, 0};
 uint8_t ratio_led_phase[2] = {0, 0};
 

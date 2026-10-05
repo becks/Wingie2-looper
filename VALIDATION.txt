@@ -1,0 +1,20 @@
+Base upstream: 1162dd770bf1e086d9abaf7c4dff72e62448344b
+
+Validated with Arduino CLI 1.5.1, ESP32 Arduino Core 2.0.4, MIDI Library 5.0.2,
+Adafruit AW9523 1.0.5, and Adafruit BusIO 1.17.4.
+
+Automated validation:
+- 7 host C++ tests passed, including the dual-looper test.
+- 112 Python tests passed; 21 skipped.
+- The dual-looper UndefinedBehaviorSanitizer check passed.
+- ESP32 build passed for `esp32:esp32:esp32`.
+
+Hardware validation summary:
+- The tested unit has no usable PSRAM; `Tools/psram_probe` reported zero bytes.
+- The 55,288-byte internal-RAM looper allocation provides approximately 5.64 seconds
+  per mono loop at 8-bit G.711 mu-law / 4.9 kHz.
+- The audio task opens a 1 ms scheduler window every 1024 blocks to avoid CPU0 idle
+  watchdog starvation during active overdub.
+- Panel Record, Play, Overdub, Bypass, protected Clear, speed shortcuts, and two
+  simultaneous loopers have been exercised. Final subjective validation of the most
+  recent live-monitoring, reverse, and per-loop-level controls remains pending.
