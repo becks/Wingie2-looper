@@ -62,6 +62,7 @@ class Wingie2
         Wingie2(int sample_rate, int buffer_size);
         ~Wingie2();
     
+        void setLooperControl(int ch, int cc, int value);
         bool start();
         void stop();
     

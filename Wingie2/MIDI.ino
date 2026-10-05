@@ -140,6 +140,10 @@ void handleControlChange (byte channel, byte number, byte value) {
 }
 
 void MIDISetParam(int ch, byte number, byte value) {
+  if (number >= 80 && number <= 85) {
+    dsp.setLooperControl(ch, number, value);
+    return;
+  }
 
   if (number == CC_MODE) {
     // 5 模式均分: 0-25 Poly / 26-51 String / 52-76 Bar / 77-102 Cave / 103-127 Ratio
