@@ -4,46 +4,77 @@
 #include <atomic>
 #include <Arduino.h>
 #include "esp_heap_caps.h"
+// Set to 1 to dump the heap map at boot when retuning the allocation.
+#ifndef LOOPER_MEM_DEBUG
+#define LOOPER_MEM_DEBUG 0
+#endif
 class LooperDSP : public decorator_dsp {
   wingie_loop::Loop loop_[2];
-  uint8_t* memory_ = nullptr;
+  // Chunk pairs, one per channel, so both loops always get the same length.
+  uint8_t* chunks_[2][wingie_loop::Loop::kMaxChunks] = {};
+  size_t chunkCount_ = 0;
   std::atomic<int> command_[2] {{0}, {0}};
   std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.9f}, {0.9f}}, cross_[2] {{0}, {0}};
-  std::atomic<bool> reverse_[2] {{false}, {false}};
+  std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}};
   float feedback_[2][64] = {};
+  static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+  // Heap left after allocation for the audio driver, its task, the control task
+  // (created after dsp.start()), Preferences and the serial protocol. No PSRAM assumption.
+  static constexpr size_t kHeapReserve = 32768;
+  // Contiguous room for task stacks created after allocation (control uses 10000 B).
+  static constexpr size_t kMinLargestBlock = 16384;
+  void releaseLastPair() {
+    --chunkCount_;
+    for (int ch=0; ch<2; ++ch) {
+      heap_caps_free(chunks_[ch][chunkCount_]);
+      chunks_[ch][chunkCount_] = nullptr;
+    }
+  }
 public:
   explicit LooperDSP(dsp* inner) : decorator_dsp(inner) {}
-  ~LooperDSP() { heap_caps_free(memory_); }
+  ~LooperDSP() { while (chunkCount_) releaseLastPair(); }
   bool allocate() {
-    if (memory_) return true;
-    // Reserve heap for the audio task, controls and serial protocol; no PSRAM assumption.
-    size_t available = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    Serial.printf("LOOPER_MEM before free=%u largest=%u reserve=65536 cap=%u\n",
-                  (unsigned)available, (unsigned)largest, (unsigned)(getSampleRate()*8));
-    size_t bytes = available > 65536 ? available - 65536 : 0;
-    bytes = std::min(bytes, std::min(largest / 2, (size_t)(getSampleRate()*8)));
-    bytes &= ~size_t(3);
-    if (bytes < 4096) {
-      Serial.printf("LOOPER_MEM allocation_failed requested=%u reason=insufficient_heap\n",
-                    (unsigned)bytes);
+    if (chunkCount_) return true;
+    const size_t chunk = wingie_loop::Loop::kChunkSize;
+    Serial.printf("LOOPER_MEM before free=%u largest=%u min_free=%u reserve=%u min_largest=%u chunk=%u\n",
+                  (unsigned)heap_caps_get_free_size(kCaps),
+                  (unsigned)heap_caps_get_largest_free_block(kCaps),
+                  (unsigned)heap_caps_get_minimum_free_size(kCaps),
+                  (unsigned)kHeapReserve, (unsigned)kMinLargestBlock, (unsigned)chunk);
+#if LOOPER_MEM_DEBUG
+    heap_caps_print_heap_info(kCaps);
+#endif
+    while (chunkCount_ < wingie_loop::Loop::kMaxChunks &&
+           heap_caps_get_free_size(kCaps) >= kHeapReserve + 2*chunk) {
+      uint8_t* a = (uint8_t*)heap_caps_malloc(chunk, kCaps);
+      uint8_t* b = a ? (uint8_t*)heap_caps_malloc(chunk, kCaps) : nullptr;
+      if (!b) {
+        heap_caps_free(a);
+        break;
+      }
+      chunks_[0][chunkCount_] = a;
+      chunks_[1][chunkCount_] = b;
+      ++chunkCount_;
+    }
+    while (chunkCount_ && heap_caps_get_largest_free_block(kCaps) < kMinLargestBlock)
+      releaseLastPair();
+    if (!chunkCount_) {
+      Serial.printf("LOOPER_MEM allocation_failed reason=insufficient_heap\n");
       return false;
     }
-    memory_ = (uint8_t*)heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (!memory_) {
-      Serial.printf("LOOPER_MEM allocation_failed requested=%u reason=malloc_failed\n",
-                    (unsigned)bytes);
-      return false;
-    }
-    size_t frames = bytes / 2;
-    for (int ch=0; ch<2; ++ch) loop_[ch].attach(memory_ + ch*frames, frames);
-    Serial.printf("LOOPER_MEM allocated=%u frames_per_channel=%u seconds_per_channel=%.3f after_free=%u after_largest=%u\n",
-                  (unsigned)bytes, (unsigned)frames,
+    for (int ch=0; ch<2; ++ch) loop_[ch].attach(chunks_[ch], chunkCount_);
+    size_t frames = chunkCount_ * chunk;
+    Serial.printf("LOOPER_MEM allocated=%u chunks_per_channel=%u frames_per_channel=%u seconds_per_channel=%.3f after_free=%u after_largest=%u\n",
+                  (unsigned)(2*frames), (unsigned)chunkCount_, (unsigned)frames,
                   frames * wingie_loop::Loop::rateDivision() / (float)getSampleRate(),
-                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+                  (unsigned)heap_caps_get_free_size(kCaps),
+                  (unsigned)heap_caps_get_largest_free_block(kCaps));
+#if LOOPER_MEM_DEBUG
+    heap_caps_print_heap_info(kCaps);
+#endif
     return true;
   }
+  bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
     if (ch < 0 || ch > 1) return;
     switch(cc) {
@@ -98,5 +129,7 @@ public:
           feedback_[ch][i]=wingie_loop::Loop::limit(out[ch][i]);
       }
     }
+    for (int ch=0; ch<2; ++ch)
+      if (loop_[ch].takeFilled()) filled_[ch].store(true);
   }
 };

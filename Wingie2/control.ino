@@ -877,6 +877,27 @@ void control(void *pvParameters) {
       }
     }
 
+    for (int ch = 0; ch < 2; ch++) {
+      if (dsp.takeLooperFilled(ch)) {
+        looperFullBlink[ch] = LOOPER_FULL_BLINK_STEPS;
+        looperFullTimer[ch] = currentMillis - LOOPER_FULL_BLINK_MS;
+        Serial.printf("LOOPER_FULL ch=%u auto_play=1\n", ch + 1);
+      }
+      // Global blinks and the save routine own both sides' LEDs; resume afterwards.
+      if (!looperFullBlink[ch] || save_routine_flag || led_blink) continue;
+      if (currentMillis - looperFullTimer[ch] >= LOOPER_FULL_BLINK_MS) {
+        looperFullTimer[ch] = currentMillis;
+        if (--looperFullBlink[ch]) {
+          byte color = ledColor[(looperFullBlink[ch] & 1) ? 0 : 2];  // red, white, ... ending white
+          for (int i = 0; i < 2; i++) digitalWrite(ledPin[ch][i], !bitRead(color, i));
+        } else {
+          ratio_led_phase[ch] = 0;
+          ratio_led_timer[ch] = currentMillis;
+          set_mode_led(ch);
+        }
+      }
+    }
+
     if (led_blink) {
       if (currentMillis - led_flash_timer > 125) {
         led_flash_timer = currentMillis;
@@ -896,7 +917,7 @@ void control(void *pvParameters) {
 
     if (!save_routine_flag && !led_blink) {
       for (int ch = 0; ch < 2; ch++) {
-        if (Mode[ch] == RATIO_MODE && currentMillis - ratio_led_timer[ch] >= RATIO_LED_INTERVAL) {
+        if (Mode[ch] == RATIO_MODE && !looperFullBlink[ch] && currentMillis - ratio_led_timer[ch] >= RATIO_LED_INTERVAL) {
           ratio_led_timer[ch] = currentMillis;
           ratio_led_phase[ch] = (ratio_led_phase[ch] + 1) & 3;
           set_mode_led(ch);

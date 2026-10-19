@@ -33,7 +33,6 @@
 #include "mpe_state.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
-#include "WiFi.h"
 #include <MIDI.h>
 
 #define MODE_NUM 4 // +1
@@ -93,6 +92,12 @@ struct MySettings : public midi::DefaultSettings
 #define MIDI_DIAGNOSTICS 0
 #endif
 
+// One serial report of heap and task stack margins 10 s after boot, for tuning
+// the looper allocation reserve. Set to 1 when retuning it.
+#ifndef LOOPER_MEM_DEBUG
+#define LOOPER_MEM_DEBUG 0
+#endif
+
 #ifndef WINGIE_FW_VERSION
 #define WINGIE_FW_VERSION "dev"
 #endif
@@ -150,6 +155,9 @@ bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
 bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
+// Per-side red/white blink when a full recording buffer switches itself to playback.
+uint8_t looperFullBlink[2] = {0, 0};
+unsigned long looperFullTimer[2] = {0, 0};
 // 模式切换标志：keys 侧仅 control 任务，MIDI 侧由 loop 任务挂起、control 任务原子消费
 volatile bool modeChangingFromKeys[2] = {false, false}, modeChangingFromMIDI[2] = {false, false};
 bool octButtonPrev[2][2] = {{true, true}, {true, true}};
@@ -277,6 +285,8 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define RATIO_LED_INTERVAL 500
 #define SAVE_DELAY 3000
 #define LOOPER_CLEAR_HOLD_MS 1000
+#define LOOPER_FULL_BLINK_STEPS 7  // six 125 ms colour steps, then restore the mode colour
+#define LOOPER_FULL_BLINK_MS 125
 unsigned long save_routine_timer, led_flash_timer, ratio_led_timer[2] = {0, 0};
 uint8_t ratio_led_phase[2] = {0, 0};
 
@@ -295,8 +305,8 @@ void setup() {
   wingie_config::setFactoryRatios(ratio_profile);
   initialize_mpe_state();
 
-  WiFi.mode(WIFI_MODE_NULL);
-  btStop();
+  // Do not reference WiFi or btStop(): linking either keeps ~80 KB of internal RAM
+  // (WiFi statics, Bluetooth controller reserve) away from the dual looper.
 
   // TRS MIDI IN 只用 RX(GPIO16)。先以 RX-only 初始化 Serial2：txPin 为负表示不接管该脚，
   // 避免 MIDI.begin 内部的 begin(baud) 把 TX2 接到默认 GPIO17（与 Wire I2C SDA 冲突）。
@@ -335,6 +345,19 @@ void loop() {
     Serial.println(xPortGetCoreID());
   }
 
+#if LOOPER_MEM_DEBUG
+  static bool memoryReported = false;
+  if (!memoryReported && millis() > 10000) {
+    memoryReported = true;
+    const uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    Serial.printf("LOOPER_MEM runtime free=%u min_free=%u largest=%u control_stack_free=%u loop_stack_free=%u\n",
+                  (unsigned)heap_caps_get_free_size(caps),
+                  (unsigned)heap_caps_get_minimum_free_size(caps),
+                  (unsigned)heap_caps_get_largest_free_block(caps),
+                  (unsigned)uxTaskGetStackHighWaterMark(controlCore),
+                  (unsigned)uxTaskGetStackHighWaterMark(NULL));
+  }
+#endif
   service_preferences_save();
   service_serial_configuration();
   if (!serial_config_ready) return;
