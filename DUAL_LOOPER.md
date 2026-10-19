@@ -71,6 +71,16 @@ Prototype limitations: continuous looper parameters still require MIDI; there is
 MIDI clock synchronization, audio persistence, or automatic pitch modulation. This is
 not yet a hardware-verified release.
 
+## CPU headroom
+
+The Faust resonators use about 80% of the audio task's block time, and audio glitches
+appear near 92%. The loop engine therefore processes whole 64-sample blocks with the
+hot state in locals, decodes stored frames only when the read position moves, and
+computes the speed step once per block. Building with `-DLOOPER_PROFILE=1` (for example
+`--build-property compiler.cpp.extra_flags=-DLOOPER_PROFILE=1`) prints a `LOOPER_PROF`
+line every two seconds with average and peak cycles per block, total and looper-only,
+against the budget.
+
 ## Build
 
 Follow `AGENTS.md`: install ESP32 Arduino Core 2.0.4, MIDI Library, and Adafruit
