@@ -158,6 +158,9 @@ unsigned long looperClearStarted[2] = {0, 0};
 // Per-side red/white blink when a full recording buffer switches itself to playback.
 uint8_t looperFullBlink[2] = {0, 0};
 unsigned long looperFullTimer[2] = {0, 0};
+// Short per-side flash each time a playing loop restarts.
+bool looperWrapFlash[2] = {false, false};
+unsigned long looperWrapTimer[2] = {0, 0};
 // 模式切换标志：keys 侧仅 control 任务，MIDI 侧由 loop 任务挂起、control 任务原子消费
 volatile bool modeChangingFromKeys[2] = {false, false}, modeChangingFromMIDI[2] = {false, false};
 bool octButtonPrev[2][2] = {{true, true}, {true, true}};
@@ -287,6 +290,7 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define LOOPER_CLEAR_HOLD_MS 1000
 #define LOOPER_FULL_BLINK_STEPS 7  // six 125 ms colour steps, then restore the mode colour
 #define LOOPER_FULL_BLINK_MS 125
+#define LOOPER_WRAP_FLASH_MS 120
 unsigned long save_routine_timer, led_flash_timer, ratio_led_timer[2] = {0, 0};
 uint8_t ratio_led_phase[2] = {0, 0};
 

@@ -42,7 +42,9 @@ Bluetooth controller reserve and the WiFi statics are not included. The measured
 172,032-byte allocation (21 chunks per side) provides approximately 17.55 seconds per side;
 the boot log prints the actual figure on a `LOOPER_MEM allocated=` line. PSRAM is not
 available on the tested unit. Recording automatically switches to playback when the
-buffer is full; that side's LED then blinks red/white for about 0.75 s. If allocation fails, the signal remains in bypass. Cross-feedback uses the previous 64-sample output block and includes the
+buffer is full; that side's LED then blinks red/white for about 0.75 s. During playback
+and overdub, the LED flashes purple (white in Cave mode) for about 120 ms each time the
+loop restarts. If allocation fails, the signal remains in bypass. Cross-feedback uses the previous 64-sample output block and includes the
 configured dry/wet mix. Loop boundaries use a short fade. Speeds other than 1× also
 change pitch. During overdub, the live input is mixed at -6 dB with the existing loop
 so new material is heard immediately; it is averaged and written once per low-rate

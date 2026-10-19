@@ -15,7 +15,7 @@ class LooperDSP : public decorator_dsp {
   size_t chunkCount_ = 0;
   std::atomic<int> command_[2] {{0}, {0}};
   std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.9f}, {0.9f}}, cross_[2] {{0}, {0}};
-  std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}};
+  std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   float feedback_[2][64] = {};
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
   // Heap left after allocation for the audio driver, its task, the control task
@@ -75,6 +75,7 @@ public:
     return true;
   }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
+  bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
     if (ch < 0 || ch > 1) return;
     switch(cc) {
@@ -129,7 +130,9 @@ public:
           feedback_[ch][i]=wingie_loop::Loop::limit(out[ch][i]);
       }
     }
-    for (int ch=0; ch<2; ++ch)
+    for (int ch=0; ch<2; ++ch) {
       if (loop_[ch].takeFilled()) filled_[ch].store(true);
+      if (loop_[ch].takeWrapped()) wrapped_[ch].store(true);
+    }
   }
 };

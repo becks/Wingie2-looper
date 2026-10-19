@@ -28,3 +28,4 @@ Longer loops (WiFi/Bluetooth removed, chunked looper allocation):
 - Serial configuration get_settings answered normally after allocation.
 - A full-length panel recording on channel 2 switched to playback by itself
   (LOOPER_FULL ch=2) and the right LED blinked red/white as intended.
+- Each loop restart flashed that side's LED purple (white in Cave), confirmed on the panel.

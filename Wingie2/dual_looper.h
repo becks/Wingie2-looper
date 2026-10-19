@@ -23,7 +23,7 @@ private:
   unsigned recordCount_ = 0, overdubCount_ = 0;
   size_t overdubIndex_ = 0;
   int state_ = 0;
-  bool filled_ = false;
+  bool filled_ = false, wrapped_ = false;
   uint8_t& at(size_t i) { return chunks_[i >> kChunkBits][i & (kChunkSize - 1)]; }
   static uint8_t encode(float sample) {
     // This runs once for each 4.9 kHz looper frame while overdubbing.  Avoid
@@ -103,13 +103,14 @@ private:
       fraction_ -= step;
       while (fraction_ < 0) {
         fraction_ += 1;
-        position_ = position_ ? position_ - 1 : length_ - 1;
+        if (position_) --position_;
+        else { position_ = length_ - 1; wrapped_ = true; }
       }
     } else {
       fraction_ += step;
       while (fraction_ >= 1) {
         fraction_ -= 1;
-        if (++position_ >= length_) position_ = 0;
+        if (++position_ >= length_) { position_ = 0; wrapped_ = true; }
       }
     }
     smooth_ += 0.02f * (level - smooth_);
@@ -136,6 +137,8 @@ public:
   int state() const { return state_; }
   // True once after recording filled the buffer and switched itself to playback.
   bool takeFilled() { bool filled = filled_; filled_ = false; return filled; }
+  // True once after playback or overdub wrapped around to the loop start.
+  bool takeWrapped() { bool wrapped = wrapped_; wrapped_ = false; return wrapped; }
   bool active() const { return capacity_ && state_ != 0; }
   static constexpr unsigned rateDivision() { return kRateDivision; }
   // 0 bypass, 1 replace-record, 2 play, 3 overdub, 4 clear.

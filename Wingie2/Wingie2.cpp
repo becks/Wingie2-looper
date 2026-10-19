@@ -14346,3 +14346,7 @@ void Wingie2::setLooperControl(int ch, int cc, int value) {
 bool Wingie2::takeLooperFilled(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeFilled(ch);
 }
+
+bool Wingie2::takeLooperWrapped(int ch) {
+    return static_cast<LooperDSP*>(fDSP)->takeWrapped(ch);
+}

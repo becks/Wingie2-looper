@@ -883,6 +883,19 @@ void control(void *pvParameters) {
         looperFullTimer[ch] = currentMillis - LOOPER_FULL_BLINK_MS;
         Serial.printf("LOOPER_FULL ch=%u auto_play=1\n", ch + 1);
       }
+      const bool ledsFree = !save_routine_flag && !led_blink && !looperFullBlink[ch];
+      if (dsp.takeLooperWrapped(ch) && !looperFullBlink[ch]) {
+        looperWrapFlash[ch] = true;
+        looperWrapTimer[ch] = currentMillis;
+        if (ledsFree) {
+          byte color = ledColor[Mode[ch] == CAVE_MODE ? 0 : 3];  // purple, white on purple Cave
+          for (int i = 0; i < 2; i++) digitalWrite(ledPin[ch][i], !bitRead(color, i));
+        }
+      }
+      if (looperWrapFlash[ch] && currentMillis - looperWrapTimer[ch] >= LOOPER_WRAP_FLASH_MS) {
+        looperWrapFlash[ch] = false;
+        if (ledsFree) set_mode_led(ch);
+      }
       // Global blinks and the save routine own both sides' LEDs; resume afterwards.
       if (!looperFullBlink[ch] || save_routine_flag || led_blink) continue;
       if (currentMillis - looperFullTimer[ch] >= LOOPER_FULL_BLINK_MS) {
@@ -917,7 +930,7 @@ void control(void *pvParameters) {
 
     if (!save_routine_flag && !led_blink) {
       for (int ch = 0; ch < 2; ch++) {
-        if (Mode[ch] == RATIO_MODE && !looperFullBlink[ch] && currentMillis - ratio_led_timer[ch] >= RATIO_LED_INTERVAL) {
+        if (Mode[ch] == RATIO_MODE && !looperFullBlink[ch] && !looperWrapFlash[ch] && currentMillis - ratio_led_timer[ch] >= RATIO_LED_INTERVAL) {
           ratio_led_timer[ch] = currentMillis;
           ratio_led_phase[ch] = (ratio_led_phase[ch] + 1) & 3;
           set_mode_led(ch);

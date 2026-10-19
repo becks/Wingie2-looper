@@ -68,6 +68,8 @@ int main() {
       if (p > 16 && p < 3*chunk-16) lowest = std::min(lowest, x);
     }
     assert(lowest > .2f);
+    // One full forward cycle above crossed the start exactly once.
+    assert(chunked.takeWrapped() && !chunked.takeWrapped());
   }
 
   // A float position drifts by percent-level amounts at ~150k frames; the
