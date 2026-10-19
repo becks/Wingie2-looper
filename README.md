@@ -1,8 +1,9 @@
 # Wingie2
 
 > This is a fork of [mengqimusic/Wingie2](https://github.com/mengqimusic/Wingie2)
-> with an experimental dual asynchronous looper feature. See
-> [Dual Looper documentation](DUAL_LOOPER.md) for controls, MIDI, audio format, and build notes.
+> with experimental dual asynchronous loopers: one audio looper (about 17.5 s) and one
+> panel note looper per side. See [Dual Looper documentation](DUAL_LOOPER.md) for controls,
+> MIDI, audio format, and build notes.
 > This is unofficial firmware: use it at your own risk.
 > To flash the current release, open the [standalone web flasher](https://github.com/becks/Wingie2-looper/releases/download/v4.30-duallooper.2/Wingie2-v4.30-duallooper.2.standalone.html)
 > in desktop Chrome or Edge.
@@ -10,6 +11,30 @@
 ## Dual Looper quick controls
 
 ![Dual Looper control combinations](doc/images/dual-looper-controls.png)
+
+Hold both Mode buttons, then press a key on the side whose looper you want to control:
+
+| Key | Action |
+|---|---|
+| C | Audio: record |
+| C# | Audio: play |
+| D | Audio: overdub |
+| D# | Audio: bypass (keeps the loop) |
+| Hold E (1 s) | Audio: clear the loop |
+| F / F# / G | Audio: speed 0.5× / 1× / 2× |
+| G# | Audio: loop level − |
+| **A** | **Notes: record → close and play → stop → play** |
+| **Hold A (1 s)** | **Notes: clear the sequence** |
+| A#/B♭ | Audio: loop level + |
+| B | Audio: reverse on/off |
+
+After pressing A to start recording, release the Mode buttons and play the note keys;
+press both Mode buttons + A again to close the loop. Recorded notes follow the current
+octave and mode (not recorded or replayed in Cave mode). Holding both Mode buttons for
+three seconds without pressing a key still saves preferences.
+
+LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
+each audio loop restart flashes the side purple (white in Cave mode).
 
 ![Wingie2 Front Small](https://user-images.githubusercontent.com/4593629/158756306-aa6c1218-f6ec-44c0-8c54-b04b49531801.jpg)
 
