@@ -14350,3 +14350,7 @@ bool Wingie2::takeLooperFilled(int ch) {
 bool Wingie2::takeLooperWrapped(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeWrapped(ch);
 }
+
+bool Wingie2::takeLooperProfile(uint32_t out[6]) {
+    return static_cast<LooperDSP*>(fDSP)->takeProfile(out);
+}

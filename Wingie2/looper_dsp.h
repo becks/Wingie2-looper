@@ -8,6 +8,14 @@
 #ifndef LOOPER_MEM_DEBUG
 #define LOOPER_MEM_DEBUG 0
 #endif
+// Audio-task CPU cycles per block, published about every 2 s for the serial
+// log; build with -DLOOPER_PROFILE=1 to measure overdub headroom.
+#ifndef LOOPER_PROFILE
+#define LOOPER_PROFILE 0
+#endif
+#if LOOPER_PROFILE
+#include <xtensa/hal.h>
+#endif
 class LooperDSP : public decorator_dsp {
   wingie_loop::Loop loop_[2];
   // Chunk pairs, one per channel, so both loops always get the same length.
@@ -18,6 +26,15 @@ class LooperDSP : public decorator_dsp {
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   float feedback_[2][64] = {};
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+#if LOOPER_PROFILE
+  static constexpr uint32_t kProfileBlocks = 1378;  // about 2 s of 64-sample blocks
+  // Written only by the audio task; published through profOut_/profSeq_.
+  uint32_t profBlocks_ = 0, profSumTotal_ = 0, profMaxTotal_ = 0;
+  uint32_t profSumLoop_ = 0, profMaxLoop_ = 0, profBlockLoop_ = 0;
+  std::atomic<uint32_t> profOut_[6] {};
+  std::atomic<uint32_t> profSeq_ {0};
+  uint32_t profSeen_ = 0;  // reader side only
+#endif
   // Heap left after allocation for the audio driver, its task, the control task
   // (created after dsp.start()), Preferences and the serial protocol. No PSRAM assumption.
   static constexpr size_t kHeapReserve = 32768;
@@ -90,7 +107,46 @@ public:
       case 85: reverse_[ch].store(value >= 64); break;
     }
   }
+  // Fills out[] with average/peak cycles per block (total, looper only) and the
+  // two loop states; true once per published window.
+  bool takeProfile(uint32_t out[6]) {
+#if LOOPER_PROFILE
+    uint32_t seq = profSeq_.load();
+    if (seq == profSeen_) return false;
+    profSeen_ = seq;
+    for (int i=0; i<6; ++i) out[i] = profOut_[i].load();
+    return true;
+#else
+    (void)out;
+    return false;
+#endif
+  }
   void compute(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) override {
+#if LOOPER_PROFILE
+    uint32_t start = xthal_get_ccount();
+    profBlockLoop_ = 0;
+    computeBlock(count, inputs, outputs);
+    uint32_t total = xthal_get_ccount() - start;
+    profSumTotal_ += total;
+    profSumLoop_ += profBlockLoop_;
+    if (total > profMaxTotal_) profMaxTotal_ = total;
+    if (profBlockLoop_ > profMaxLoop_) profMaxLoop_ = profBlockLoop_;
+    if (++profBlocks_ == kProfileBlocks) {
+      profOut_[0].store(profSumTotal_ / kProfileBlocks);
+      profOut_[1].store(profMaxTotal_);
+      profOut_[2].store(profSumLoop_ / kProfileBlocks);
+      profOut_[3].store(profMaxLoop_);
+      profOut_[4].store(loop_[0].state());
+      profOut_[5].store(loop_[1].state());
+      profSeq_.fetch_add(1);
+      profBlocks_ = profSumTotal_ = profMaxTotal_ = profSumLoop_ = profMaxLoop_ = 0;
+    }
+#else
+    computeBlock(count, inputs, outputs);
+#endif
+  }
+private:
+  void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
     float speed[2], level[2], retention[2], cross[2];
     bool reverse[2];
     for (int ch=0; ch<2; ++ch) {
@@ -114,16 +170,21 @@ public:
       FAUSTFLOAT *in[2]={active[0] ? storage[0] : inputs[0]+offset,
                         active[1] ? storage[1] : inputs[1]+offset};
       FAUSTFLOAT *out[2]={outputs[0]+offset,outputs[1]+offset};
+#if LOOPER_PROFILE
+      uint32_t loopStart = xthal_get_ccount();
+#endif
       for (int ch=0; ch<2; ++ch) {
         if (!active[ch]) continue;
-        if (reverse[ch]) {
-          for (int i=0; i<n; ++i)
-            in[ch][i]=loop_[ch].processReverse(inputs[ch][offset+i],speed[ch],level[ch],retention[ch],cross[ch]*feedback_[1-ch][i]);
-        } else {
-          for (int i=0; i<n; ++i)
-            in[ch][i]=loop_[ch].process(inputs[ch][offset+i],speed[ch],level[ch],retention[ch],cross[ch]*feedback_[1-ch][i]);
-        }
+        float step = speed[ch] / wingie_loop::Loop::rateDivision();
+        const float* feedback = captureFeedback ? feedback_[1-ch] : nullptr;
+        if (reverse[ch])
+          loop_[ch].processReverse(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch]);
+        else
+          loop_[ch].process(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch]);
       }
+#if LOOPER_PROFILE
+      profBlockLoop_ += xthal_get_ccount() - loopStart;
+#endif
       fDSP->compute(n,in,out);
       if (captureFeedback) {
         for (int i=0; i<n; ++i) for (int ch=0; ch<2; ++ch)

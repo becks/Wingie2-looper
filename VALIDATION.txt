@@ -37,3 +37,14 @@ Note loopers (panel A key):
   allocates 21 chunks per side (17.55 s), with 33,988 bytes free after allocation.
 - On hardware: an 11-key, 17.48 s note loop on channel 1 replayed while the channel 2
   audio looper recorded and played, including 0.5x speed; behaviour confirmed by ear.
+
+Overdub CPU (block-processed loop engine):
+- Profiling build (-DLOOPER_PROFILE=1), cycles per 64-sample block, budget 348,299
+  at 240 MHz; glitches started near 320,000 total.
+- Before: both loops playing cost 38,300 looper cycles; one overdub plus one play
+  44,000 (total 318,900 average, 323,500 peak) and audibly glitched.
+- After: both playing 10,850; one overdub plus one play 16,200 (total 291,300 average,
+  294,800 peak). One and two simultaneous overdubs no longer glitch, confirmed by ear.
+- A host comparison against the previous per-sample engine produced identical output
+  over 268,800 samples (record, 0.5x/1x/2x, overdub with cross-feedback, reverse,
+  full buffer) and identical stored loop bytes.

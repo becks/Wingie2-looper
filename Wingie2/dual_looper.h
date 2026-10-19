@@ -62,62 +62,93 @@ private:
     overdubCount_ = 0;
   }
   float retention_ = 0.9f;
+  // Decoded neighbours of the current frame; they change only every ~9 samples.
+  static constexpr size_t kNoCache = ~size_t(0);
+  size_t cachedIndex_ = kNoCache;
+  float cachedA_ = 0, cachedB_ = 0;
+  // Block processing keeps the hot playback state in locals: the audio task has
+  // only a few percent of headroom above the Faust resonators.
   template <bool kReverse>
-  float processDirection(float input, float speed, float level, float retention, float feedback) {
-    if (!capacity_ || state_ == 0) return input;
-    if (state_ == 1) {
-      recordSum_ += limit(input);
+  void processBlock(const float* input, float* output, int n, float step, float level,
+                    float retention, const float* feedback, float cross) {
+    if (!capacity_ || state_ == 0) {
+      for (int k = 0; k < n; ++k) output[k] = input[k];
+      return;
+    }
+    int k = 0;
+    for (; k < n && state_ == 1; ++k) {
+      output[k] = input[k];
+      recordSum_ += limit(input[k]);
       if (++recordCount_ == kRateDivision) {
-        at(length_++) = encode(recordSum_ / kRateDivision);
+        at(length_++) = encode(recordSum_ * (1.0f / kRateDivision));
         recordSum_ = 0;
         recordCount_ = 0;
       }
       if (length_ == capacity_) {
         state_ = 2; position_ = 0; fraction_ = 0; filled_ = true;
-      }
-      return input;
-    }
-    size_t i = position_, j = i + 1;
-    if (j == length_) j = 0;
-    float sample = decode(at(i)) * (1-fraction_) + decode(at(j)) * fraction_;
-    // Short edge fade suppresses discontinuities without changing loop duration.
-    size_t back = length_ - i;
-    float edge = i < back ? i + fraction_ : back - fraction_;
-    float fadeLength = length_ < 32 ? length_ * 0.25f : 8.0f;
-    if (edge < fadeLength) sample *= edge / fadeLength;
-    if (state_ == 3) {
-      retention_ = retention;
-      if (!overdubCount_) overdubIndex_ = i;
-      if (i != overdubIndex_) {
-        finishOverdub();
-        overdubIndex_ = i;
-      }
-      // Codec input is already finite and in range; re-checking it on every
-      // 44.1 kHz sample is needlessly expensive during overdub.
-      overdubInputSum_ += input;
-      if (feedback != 0) overdubFeedbackSum_ += feedback;
-      overdubCount_++;
-    }
-    float step = speed / kRateDivision;
-    if (kReverse) {
-      fraction_ -= step;
-      while (fraction_ < 0) {
-        fraction_ += 1;
-        if (position_) --position_;
-        else { position_ = length_ - 1; wrapped_ = true; }
-      }
-    } else {
-      fraction_ += step;
-      while (fraction_ >= 1) {
-        fraction_ -= 1;
-        if (++position_ >= length_) { position_ = 0; wrapped_ = true; }
+        cachedIndex_ = kNoCache;
       }
     }
-    smooth_ += 0.02f * (level - smooth_);
-    // During overdub, let the player hear the new material immediately as
-    // well as the existing loop. -6 dB keeps their combined drive controlled.
-    if (state_ == 3) return sample * smooth_ + input * 0.5f;
-    return sample * smooth_;
+    if (k == n) return;
+    const size_t length = length_;
+    const bool overdub = state_ == 3;
+    const float fadeLength = length < 32 ? length * 0.25f : 8.0f;
+    const float fadeScale = 1.0f / fadeLength;
+    size_t position = position_, cached = cachedIndex_;
+    float fraction = fraction_, smooth = smooth_, a = cachedA_, b = cachedB_;
+    if (overdub) retention_ = retention;
+    for (; k < n; ++k) {
+      if (position != cached) {
+        size_t next = position + 1 == length ? 0 : position + 1;
+        a = decode(at(position));
+        b = decode(at(next));
+        cached = position;
+      }
+      float sample = a + (b - a) * fraction;
+      // Short edge fade suppresses discontinuities without changing loop duration.
+      size_t back = length - position;
+      if (position < 9 || back <= 9) {
+        float edge = position < back ? position + fraction : back - fraction;
+        if (edge < fadeLength) sample *= edge * fadeScale;
+      }
+      if (overdub) {
+        if (!overdubCount_) overdubIndex_ = position;
+        if (position != overdubIndex_) {
+          finishOverdub();
+          overdubIndex_ = position;
+          cached = kNoCache;  // the rewritten frame may be one of the neighbours
+        }
+        // Codec input is already finite and in range; re-checking it on every
+        // 44.1 kHz sample is needlessly expensive during overdub.
+        overdubInputSum_ += input[k];
+        if (feedback && cross != 0) overdubFeedbackSum_ += cross * feedback[k];
+        overdubCount_++;
+      }
+      if (kReverse) {
+        fraction -= step;
+        while (fraction < 0) {
+          fraction += 1;
+          if (position) --position;
+          else { position = length - 1; wrapped_ = true; }
+        }
+      } else {
+        fraction += step;
+        while (fraction >= 1) {
+          fraction -= 1;
+          if (++position >= length) { position = 0; wrapped_ = true; }
+        }
+      }
+      smooth += 0.02f * (level - smooth);
+      // During overdub, let the player hear the new material immediately as
+      // well as the existing loop. -6 dB keeps their combined drive controlled.
+      output[k] = overdub ? sample * smooth + input[k] * 0.5f : sample * smooth;
+    }
+    position_ = position;
+    fraction_ = fraction;
+    smooth_ = smooth;
+    cachedIndex_ = cached;
+    cachedA_ = a;
+    cachedB_ = b;
   }
 public:
   void attach(uint8_t* const* chunks, size_t count) {
@@ -144,6 +175,7 @@ public:
   // 0 bypass, 1 replace-record, 2 play, 3 overdub, 4 clear.
   void command(int value) {
     if (!capacity_) return;
+    cachedIndex_ = kNoCache;
     if (value == 4) {
       length_ = 0; position_ = 0; fraction_ = 0; state_ = 0;
       recordSum_ = overdubInputSum_ = overdubFeedbackSum_ = 0;
@@ -170,13 +202,26 @@ public:
     if (x > 1) return 1;
     return x;
   }
-  // Keep normal playback on the original forward-only inner path. Reverse is
-  // selected outside the per-sample loop by LooperDSP.
+  // Processes n samples; `step` is speed / rateDivision(), computed once per
+  // block. `feedback` (scaled by `cross`) may be null when cross-feedback is off.
+  void process(const float* input, float* output, int n, float step, float level,
+               float retention, const float* feedback, float cross) {
+    processBlock<false>(input, output, n, step, level, retention, feedback, cross);
+  }
+  void processReverse(const float* input, float* output, int n, float step, float level,
+                      float retention, const float* feedback, float cross) {
+    processBlock<true>(input, output, n, step, level, retention, feedback, cross);
+  }
+  // Single-sample convenience used by the host tests.
   float process(float input, float speed, float level, float retention, float feedback) {
-    return processDirection<false>(input, speed, level, retention, feedback);
+    float output;
+    process(&input, &output, 1, speed / kRateDivision, level, retention, &feedback, 1);
+    return output;
   }
   float processReverse(float input, float speed, float level, float retention, float feedback) {
-    return processDirection<true>(input, speed, level, retention, feedback);
+    float output;
+    processReverse(&input, &output, 1, speed / kRateDivision, level, retention, &feedback, 1);
+    return output;
   }
 };
 }

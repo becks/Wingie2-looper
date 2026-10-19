@@ -99,6 +99,11 @@ struct MySettings : public midi::DefaultSettings
 #define LOOPER_MEM_DEBUG 0
 #endif
 
+// Prints audio-task cycles per block every ~2 s; see LOOPER_PROFILE in looper_dsp.h.
+#ifndef LOOPER_PROFILE
+#define LOOPER_PROFILE 0
+#endif
+
 #ifndef WINGIE_FW_VERSION
 #define WINGIE_FW_VERSION "dev"
 #endif
@@ -365,6 +370,15 @@ void loop() {
                   (unsigned)heap_caps_get_largest_free_block(caps),
                   (unsigned)uxTaskGetStackHighWaterMark(controlCore),
                   (unsigned)uxTaskGetStackHighWaterMark(NULL));
+  }
+#endif
+#if LOOPER_PROFILE
+  uint32_t profile[6];
+  if (dsp.takeLooperProfile(profile)) {
+    Serial.printf("LOOPER_PROF states=%u,%u avg=%u max=%u loop_avg=%u loop_max=%u budget=%u\n",
+                  (unsigned)profile[4], (unsigned)profile[5], (unsigned)profile[0], (unsigned)profile[1],
+                  (unsigned)profile[2], (unsigned)profile[3],
+                  (unsigned)(getCpuFrequencyMhz() * 1000000ULL * 64 / 44100));
   }
 #endif
   service_preferences_save();
