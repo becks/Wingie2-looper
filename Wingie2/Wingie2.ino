@@ -31,6 +31,7 @@
 #include "decay_expression.h"
 #include "device_state.h"
 #include "mpe_state.h"
+#include "note_looper.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
 #include <MIDI.h>
@@ -161,6 +162,10 @@ unsigned long looperFullTimer[2] = {0, 0};
 // Short per-side flash each time a playing loop restarts.
 bool looperWrapFlash[2] = {false, false};
 unsigned long looperWrapTimer[2] = {0, 0};
+// Panel key loopers (A in the looper layer); played from the control task.
+wingie_loop::NoteLoop noteLoop[2];
+bool noteLoopClearArmed[2] = {false, false};
+unsigned long noteLoopClearStarted[2] = {0, 0};
 // 模式切换标志：keys 侧仅 control 任务，MIDI 侧由 loop 任务挂起、control 任务原子消费
 volatile bool modeChangingFromKeys[2] = {false, false}, modeChangingFromMIDI[2] = {false, false};
 bool octButtonPrev[2][2] = {{true, true}, {true, true}};
