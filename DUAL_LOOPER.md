@@ -34,10 +34,17 @@ and disappear when the instrument is powered off.
 Audio is stored as 8-bit G.711 μ-law at 4.9 kHz while the codec and DSP continue to run
 at 44.1 kHz. Companding gives quiet and medium-level material more resolution than
 linear 8-bit PCM without increasing memory use. Each stored sample is the average of
-nine input samples, and playback is linearly interpolated. The measured 55,288-byte allocation provides approximately
-5.64 seconds per side. PSRAM is not available on the tested unit. Recording automatically
-switches to playback when the buffer is full. If allocation fails, the signal remains in
-bypass. Cross-feedback uses the previous 64-sample output block and includes the
+nine input samples, and playback is linearly interpolated. Loop memory is allocated as
+4 KB chunk pairs (one chunk per side) spread across the internal-RAM heap regions,
+leaving 32 KB of heap and a 16 KB contiguous block for later allocations. The firmware
+links neither WiFi nor Bluetooth (not even `btStop()`), so the core releases the
+Bluetooth controller reserve and the WiFi statics are not included. The measured
+172,032-byte allocation (21 chunks per side) provides approximately 17.55 seconds per side;
+the boot log prints the actual figure on a `LOOPER_MEM allocated=` line. PSRAM is not
+available on the tested unit. Recording automatically switches to playback when the
+buffer is full; that side's LED then blinks red/white for about 0.75 s. During playback
+and overdub, the LED flashes purple (white in Cave mode) for about 120 ms each time the
+loop restarts. If allocation fails, the signal remains in bypass. Cross-feedback uses the previous 64-sample output block and includes the
 configured dry/wet mix. Loop boundaries use a short fade. Speeds other than 1× also
 change pitch. During overdub, the live input is mixed at -6 dB with the existing loop
 so new material is heard immediately; it is averaged and written once per low-rate

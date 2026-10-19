@@ -18,3 +18,14 @@ Hardware validation summary:
 - Panel Record, Play, Overdub, Bypass, protected Clear, speed shortcuts, and two
   simultaneous loopers have been exercised. Final subjective validation of the most
   recent live-monitoring, reverse, and per-loop-level controls remains pending.
+
+Longer loops (WiFi/Bluetooth removed, chunked looper allocation):
+- Static RAM dropped from 52,244 to 27,704 bytes; flash use from 92% to 51%.
+- Boot log on hardware: 172,032-byte allocation, 21 x 4 KB chunks per side,
+  approximately 17.55 seconds per mono loop (previously 5.64 s).
+- Runtime heap 10 s after boot: free 18,784, minimum 18,456, largest block 7,028;
+  control task stack 7,800 bytes unused of 10,000; loop task 6,244 unused.
+- Serial configuration get_settings answered normally after allocation.
+- A full-length panel recording on channel 2 switched to playback by itself
+  (LOOPER_FULL ch=2) and the right LED blinked red/white as intended.
+- Each loop restart flashed that side's LED purple (white in Cave), confirmed on the panel.

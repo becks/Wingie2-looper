@@ -5,14 +5,26 @@
 #include <math.h>
 namespace wingie_loop {
 class Loop {
+public:
+  // Storage is a table of fixed-size chunks so one loop can span several
+  // separate internal-RAM heap regions.
+  static constexpr unsigned kChunkBits = 12;
+  static constexpr size_t kChunkSize = size_t(1) << kChunkBits;
+  static constexpr size_t kMaxChunks = 64;
+private:
   static constexpr unsigned kRateDivision = 9;
-  uint8_t* data_ = nullptr;
+  uint8_t* chunks_[kMaxChunks] = {};
   size_t capacity_ = 0, length_ = 0;
-  float phase_ = 0, smooth_ = 0;
+  // Integer frame plus fraction: a single float position cannot represent the
+  // speed/9 step accurately once loops grow past a few tens of thousands of frames.
+  size_t position_ = 0;
+  float fraction_ = 0, smooth_ = 0;
   float recordSum_ = 0, overdubInputSum_ = 0, overdubFeedbackSum_ = 0;
   unsigned recordCount_ = 0, overdubCount_ = 0;
   size_t overdubIndex_ = 0;
   int state_ = 0;
+  bool filled_ = false, wrapped_ = false;
+  uint8_t& at(size_t i) { return chunks_[i >> kChunkBits][i & (kChunkSize - 1)]; }
   static uint8_t encode(float sample) {
     // This runs once for each 4.9 kHz looper frame while overdubbing.  Avoid
     // the floating-point rounding helper and the eight-step exponent scan so
@@ -36,7 +48,7 @@ class Loop {
   }
   void finishRecording() {
     if (recordCount_ && length_ < capacity_)
-      data_[length_++] = encode(recordSum_ / recordCount_);
+      at(length_++) = encode(recordSum_ / recordCount_);
     recordSum_ = 0;
     recordCount_ = 0;
   }
@@ -44,7 +56,7 @@ class Loop {
     if (!overdubCount_ || overdubIndex_ >= length_) return;
     float input = overdubInputSum_ / overdubCount_;
     float feedback = overdubFeedbackSum_ / overdubCount_;
-    data_[overdubIndex_] = encode(decode(data_[overdubIndex_]) * retention_ + input + feedback);
+    at(overdubIndex_) = encode(decode(at(overdubIndex_)) * retention_ + input + feedback);
     overdubInputSum_ = 0;
     overdubFeedbackSum_ = 0;
     overdubCount_ = 0;
@@ -52,25 +64,25 @@ class Loop {
   float retention_ = 0.9f;
   template <bool kReverse>
   float processDirection(float input, float speed, float level, float retention, float feedback) {
-    if (!data_ || state_ == 0) return input;
+    if (!capacity_ || state_ == 0) return input;
     if (state_ == 1) {
       recordSum_ += limit(input);
       if (++recordCount_ == kRateDivision) {
-        data_[length_++] = encode(recordSum_ / kRateDivision);
+        at(length_++) = encode(recordSum_ / kRateDivision);
         recordSum_ = 0;
         recordCount_ = 0;
       }
       if (length_ == capacity_) {
-        state_ = 2; phase_ = 0;
+        state_ = 2; position_ = 0; fraction_ = 0; filled_ = true;
       }
       return input;
     }
-    size_t i = (size_t)phase_, j = i + 1;
+    size_t i = position_, j = i + 1;
     if (j == length_) j = 0;
-    float fraction = phase_ - i;
-    float sample = decode(data_[i]) * (1-fraction) + decode(data_[j]) * fraction;
+    float sample = decode(at(i)) * (1-fraction_) + decode(at(j)) * fraction_;
     // Short edge fade suppresses discontinuities without changing loop duration.
-    float edge = phase_ < (float)length_ - phase_ ? phase_ : (float)length_ - phase_;
+    size_t back = length_ - i;
+    float edge = i < back ? i + fraction_ : back - fraction_;
     float fadeLength = length_ < 32 ? length_ * 0.25f : 8.0f;
     if (edge < fadeLength) sample *= edge / fadeLength;
     if (state_ == 3) {
@@ -86,12 +98,20 @@ class Loop {
       if (feedback != 0) overdubFeedbackSum_ += feedback;
       overdubCount_++;
     }
+    float step = speed / kRateDivision;
     if (kReverse) {
-      phase_ -= speed / kRateDivision;
-      while (phase_ < 0) phase_ += length_;
+      fraction_ -= step;
+      while (fraction_ < 0) {
+        fraction_ += 1;
+        if (position_) --position_;
+        else { position_ = length_ - 1; wrapped_ = true; }
+      }
     } else {
-      phase_ += speed / kRateDivision;
-      while (phase_ >= length_) phase_ -= length_;
+      fraction_ += step;
+      while (fraction_ >= 1) {
+        fraction_ -= 1;
+        if (++position_ >= length_) { position_ = 0; wrapped_ = true; }
+      }
     }
     smooth_ += 0.02f * (level - smooth_);
     // During overdub, let the player hear the new material immediately as
@@ -100,22 +120,38 @@ class Loop {
     return sample * smooth_;
   }
 public:
-  void attach(uint8_t* data, size_t capacity) { data_ = data; capacity_ = capacity; }
+  void attach(uint8_t* const* chunks, size_t count) {
+    if (count > kMaxChunks) count = kMaxChunks;
+    for (size_t c = 0; c < count; ++c) chunks_[c] = chunks[c];
+    capacity_ = count * kChunkSize;
+  }
+  // Contiguous buffer convenience, used by the host tests.
+  void attach(uint8_t* data, size_t capacity) {
+    if (!data) capacity = 0;
+    if (capacity > kMaxChunks * kChunkSize) capacity = kMaxChunks * kChunkSize;
+    for (size_t c = 0; c * kChunkSize < capacity; ++c) chunks_[c] = data + c * kChunkSize;
+    capacity_ = capacity;
+  }
   size_t length() const { return length_; }
+  size_t position() const { return position_; }
   int state() const { return state_; }
-  bool active() const { return data_ && state_ != 0; }
+  // True once after recording filled the buffer and switched itself to playback.
+  bool takeFilled() { bool filled = filled_; filled_ = false; return filled; }
+  // True once after playback or overdub wrapped around to the loop start.
+  bool takeWrapped() { bool wrapped = wrapped_; wrapped_ = false; return wrapped; }
+  bool active() const { return capacity_ && state_ != 0; }
   static constexpr unsigned rateDivision() { return kRateDivision; }
   // 0 bypass, 1 replace-record, 2 play, 3 overdub, 4 clear.
   void command(int value) {
-    if (!data_) return;
+    if (!capacity_) return;
     if (value == 4) {
-      length_ = 0; phase_ = 0; state_ = 0;
+      length_ = 0; position_ = 0; fraction_ = 0; state_ = 0;
       recordSum_ = overdubInputSum_ = overdubFeedbackSum_ = 0;
       recordCount_ = overdubCount_ = 0;
     }
     else if (value == 1) {
       if (state_ != 1) {
-        length_ = 0; phase_ = 0; recordSum_ = 0; recordCount_ = 0;
+        length_ = 0; position_ = 0; fraction_ = 0; recordSum_ = 0; recordCount_ = 0;
         overdubInputSum_ = overdubFeedbackSum_ = 0; overdubCount_ = 0;
       }
       state_ = 1;
@@ -124,7 +160,7 @@ public:
       if (state_ == 1) finishRecording();
       if (state_ == 3) finishOverdub();
       state_ = (value >= 2 && !length_) ? 0 : value;
-      if (state_ >= 2 && phase_ >= length_) phase_ = 0;
+      if (state_ >= 2 && position_ >= length_) { position_ = 0; fraction_ = 0; }
       if (state_ == 3) overdubCount_ = 0;
     }
   }
