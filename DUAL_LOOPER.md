@@ -17,6 +17,23 @@ While holding both Mode buttons, F selects 0.5× speed, F# selects 1×, and G se
 2× on the keyboard's corresponding looper. G# lowers and A#/B♭ raises that side's
 loop level in approximately 6% steps. B toggles reverse playback.
 
+### Note loopers
+
+Each side also has a panel key looper. While holding both Mode buttons, A starts
+recording that side's note keys; release the Mode buttons and play normally. Hold both
+Mode buttons and press A again to close the loop: its length is the time between the two
+A presses, and playback starts immediately. During playback, A stops the sequence and
+the next A restarts it from the beginning. Holding A for one second clears it; a new A
+then records again. Up to 256 key presses per side are stored, and a full buffer closes
+the loop by itself.
+
+Recorded keys are replayed at the current octave, so the octave selector transposes
+a running sequence. They follow the side's current mode: Poly and Ratio cycle voices,
+String and Bar set the note without changing the tap sequence, and Cave mode neither
+records nor replays keys (its keys edit resonator mutes). Only panel keys are recorded,
+not incoming MIDI notes, and sequences are lost at power-off. The note and audio loopers
+run independently and are not synchronized.
+
 | CC | Function | Value |
 |---|---|---|
 | 80 | State | 0 bypass/stop; 1 new recording; 2 playback; 3 overdub; 4 clear |

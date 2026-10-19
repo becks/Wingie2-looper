@@ -35,6 +35,41 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     led_flash_timer = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u level=%u%%\n", ch + 1,
                   (unsigned)((looperLevel[ch] * 100 + 63) / 127));
+  } else if (keyIndex == 9) {  // A: note looper record / close / stop / resume
+    using wingie_loop::NoteLoop;
+    NoteLoop &loop = noteLoop[ch];
+    const char *name = "play";
+    byte color = 0;
+    switch (loop.state()) {
+      case NoteLoop::kEmpty:
+        loop.startRecording(currentMillis);
+        name = "record";
+        color = 2;
+        break;
+      case NoteLoop::kRecording:
+        loop.finishRecording(currentMillis);
+        if (loop.state() == NoteLoop::kEmpty) {
+          name = "empty";
+          color = 1;
+        }
+        break;
+      case NoteLoop::kPlaying:
+        loop.stop();
+        name = "stop";
+        color = 1;
+        break;
+      case NoteLoop::kStopped:
+        loop.play(currentMillis);
+        break;
+    }
+    // Holding A for a second clears the sequence, like E for the audio loop.
+    noteLoopClearArmed[ch] = true;
+    noteLoopClearStarted[ch] = currentMillis;
+    led_blink = 3;
+    led_blink_color = ledColor[color];
+    led_flash_timer = currentMillis;
+    Serial.printf("NOTE_LOOPER ch=%u command=%s events=%u length_ms=%lu\n", ch + 1, name,
+                  loop.count(), (unsigned long)loop.lengthMs());
   } else if (keyIndex == 11) {  // B
     looperReverse[ch] = !looperReverse[ch];
     dsp.setLooperControl(ch, 85, looperReverse[ch] ? 127 : 0);
@@ -42,6 +77,31 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     led_blink_color = ledColor[looperReverse[ch] ? 3 : 0];
     led_flash_timer = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u reverse=%s\n", ch + 1, looperReverse[ch] ? "on" : "off");
+  }
+}
+
+void noteLoopRecordKey(byte ch, byte keyIndex) {
+  // Cave keys edit resonator mutes rather than play notes.
+  if (!noteLoop[ch].recording() || Mode[ch] == CAVE_MODE) return;
+  if (noteLoop[ch].record(currentMillis, keyIndex)) {
+    led_blink = 3;
+    led_blink_color = ledColor[0];
+    led_flash_timer = currentMillis;
+    Serial.printf("NOTE_LOOPER ch=%u command=full events=%u length_ms=%lu\n", ch + 1,
+                  noteLoop[ch].count(), (unsigned long)noteLoop[ch].lengthMs());
+  }
+}
+
+// Replays a recorded panel key at the current octave, without touching the
+// String/Bar tap sequence that live presses build.
+void playRecordedKey(byte ch, byte keyIndex) {
+  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+    note[ch] = keyIndex;
+    set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
+  } else if (Mode[ch] == POLY_MODE) {
+    cycle_poly_voice_note(ch, keyIndex + BASE_NOTE + oct[ch] * 12 + (ch ? POLY_MODE_NOTE_ADD_R : POLY_MODE_NOTE_ADD_L));
+  } else if (Mode[ch] == RATIO_MODE) {
+    cycle_ratio_voice_note(ch, keyIndex + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
   }
 }
 
@@ -690,6 +750,8 @@ void control(void *pvParameters) {
                 //if (!ch) dsp.setParamValue("/Wingie/left/mode_changed", 1);
                 //if (ch) dsp.setParamValue("/Wingie/right/mode_changed", 1);
 
+                noteLoopRecordKey(ch, i);
+
                 if (firstPress[ch]) {
                   firstPress[ch] = false;
 
@@ -752,6 +814,7 @@ void control(void *pvParameters) {
 
             else {  // Key Release Action Start
               if (i == 4) looperClearArmed[ch] = false;
+              if (i == 9) noteLoopClearArmed[ch] = false;
               if (!allKeys[ch]) firstPress[ch] = true;
               //if (!ch) dsp.setParamValue("/Wingie/left/mode_changed", 0);
               //if (ch) dsp.setParamValue("/Wingie/right/mode_changed", 0);
@@ -776,6 +839,23 @@ void control(void *pvParameters) {
         led_flash_timer = currentMillis;
         Serial.printf("LOOPER_PANEL ch=%u command=clear\n", ch + 1);
       }
+    }
+
+    for (int ch = 0; ch < 2; ch++) {
+      if (noteLoopClearArmed[ch]) {
+        if (modeButtonState[0] || modeButtonState[1] || key[ch][9]) {
+          noteLoopClearArmed[ch] = false;
+        } else if (currentMillis - noteLoopClearStarted[ch] >= LOOPER_CLEAR_HOLD_MS) {
+          noteLoopClearArmed[ch] = false;
+          noteLoop[ch].clear();
+          led_blink = 5;
+          led_blink_color = ledColor[2];
+          led_flash_timer = currentMillis;
+          Serial.printf("NOTE_LOOPER ch=%u command=clear\n", ch + 1);
+        }
+      }
+      uint8_t recordedKey;
+      while (noteLoop[ch].next(currentMillis, recordedKey)) playRecordedKey(ch, recordedKey);
     }
 
     //
@@ -856,6 +936,8 @@ void control(void *pvParameters) {
       looperPanelGesture = false;
       looperClearArmed[0] = false;
       looperClearArmed[1] = false;
+      noteLoopClearArmed[0] = false;
+      noteLoopClearArmed[1] = false;
     }
 
     if (save_routine_flag) {
