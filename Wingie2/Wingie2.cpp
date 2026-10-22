@@ -14379,6 +14379,10 @@ void Wingie2::setLooperControl(int ch, int cc, int value) {
     static_cast<LooperDSP*>(fDSP)->control(ch, cc, value);
 }
 
+void Wingie2::setLooperRetention(int ch, float value) {
+    static_cast<LooperDSP*>(fDSP)->setRetention(ch, value);
+}
+
 bool Wingie2::takeLooperFilled(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeFilled(ch);
 }

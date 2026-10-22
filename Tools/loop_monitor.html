@@ -89,7 +89,7 @@
     .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
     .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: var(--muted); }
-    /* Pan is the one control the page writes (set_param); everything else is read-only. */
+    /* Pan and SOS are the controls the page writes (set_param); everything else is read-only. */
     .control { display: inline-flex; align-items: center; gap: 8px; }
     .control[hidden] { display: none; }
     .control input { width: 120px; accent-color: var(--wave); }
@@ -268,10 +268,11 @@
         mode (not in Cave mode).</p>
     </section>
     <footer>
-      View over USB (Web Serial, Chrome or Edge). The only control is each side's Pan, which changes
-      the running state (save it from the configuration page or by holding both Mode buttons for
-      3 s). Close the page before using the Arduino serial monitor or the web flasher. Requires
-      firmware v4.30-duallooper.5 or later; Pan needs v4.30-duallooper.6 or later.
+      View over USB (Web Serial, Chrome or Edge). The only controls are each side's Pan and SOS:
+      Pan changes the running state (save it from the configuration page or by holding both Mode
+      buttons for 3 s); SOS is not saved and returns to 80% at power-on. Close the page before using
+      the Arduino serial monitor or the web flasher. Requires firmware v4.30-duallooper.5 or later;
+      Pan and SOS need v4.30-duallooper.6 or later.
     </footer>
   </main>
 
@@ -293,6 +294,7 @@
           <span>Speed <b data-speed>–</b></span>
           <span>Level <b data-level>–</b></span>
           <span>Direction <b data-direction>–</b></span>
+          <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
       </section>
       <section>
@@ -327,9 +329,10 @@
     // ignored so the device's echo doesn't fight the pointer.
     const CONTROL_HOLD_MS = 800;
     // Side controls written with set_param. The slider works in its own units;
-    // the firmware takes 0-1.
+    // the firmware takes 0-1 for both.
     const CONTROLS = {
       pan: {toDevice: (v) => v, fromDevice: (v) => v, label: panLabel},
+      sos: {toDevice: (v) => v / 100, fromDevice: (v) => Math.round(v * 100), label: (v) => v + "%"},
     };
     // Panel ranges as the firmware applies them (decay in the DSP's units).
     const SLIDERS = [
@@ -370,7 +373,7 @@
       notesBusy: false,
       lastNotesMs: null,
       playedUntil: new Array(12).fill(0),
-      controls: {pan: {holdUntil: 0, wanted: null, busy: false}},
+      controls: {pan: {holdUntil: 0, wanted: null, busy: false}, sos: {holdUntil: 0, wanted: null, busy: false}},
       ui: null,
     }));
     let fps = 4900;
@@ -676,7 +679,7 @@
           const side = view[index];
           side.status = {
             audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
-                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6]},
+                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7]},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
             mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
           };
@@ -881,6 +884,7 @@
           ? (notesPosition(notes, elapsed) / 1000).toFixed(2) + " s" : "–";
         trackPlayed(side, elapsed, now);
         renderControl(side, "pan", status.sliders[3], now);
+        renderControl(side, "sos", audio.sos, now);
       }
       ui.keyCells.forEach((cell, key) => {
         const held = status && (status.keys >> key) & 1;

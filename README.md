@@ -42,8 +42,9 @@ each audio loop restart flashes the side purple (white in Cave mode).
 
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
-level and direction, the panel keys and controls, and input/output levels. Its only control is each
-side's Pan slider (see below). Open it from disk in
+level and direction, the panel keys and controls, and input/output levels. Its only controls are each
+side's Pan slider (see below) and SOS slider: sound on sound, the share of the loop kept on each
+overdub pass (0–100%, same as MIDI CC 83). SOS starts at 80% and is not saved. Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
 

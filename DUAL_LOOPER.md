@@ -39,7 +39,7 @@ run independently and are not synchronized.
 | 80 | State | 0 bypass/stop; 1 new recording; 2 playback; 3 overdub; 4 clear |
 | 81 | Speed/pitch | 0 approximately half speed; 64 normal; 127 approximately double speed |
 | 82 | Loop level | 0–127 |
-| 83 | Material retained during overdub | 0–127; default approximately 90% |
+| 83 | Material retained during overdub (sound on sound) | 0–127; default approximately 80% |
 | 84 | Cross-feedback during overdub | 0–127 = 0–25% of the opposite output |
 | 85 | Reverse | 0–63 forward; 64–127 reverse |
 

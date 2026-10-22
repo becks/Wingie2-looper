@@ -104,6 +104,7 @@ struct LoopSideSnapshot {
   float speed;
   float level;
   bool reverse;
+  float retention;  // sound on sound: share kept per overdub pass
   int notesState;
   uint16_t noteCount;
   uint32_t notesLengthMs;
@@ -323,7 +324,7 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 }
 
 // Compact on purpose: the monitor polls it several times a second over 115200 baud.
-// a: [state, length, position, capacity, speed, level, reverse] (frames)
+// a: [state, length, position, capacity, speed, level, reverse, sos] (frames)
 // n: [state, events, length_ms, position_ms, revision]
 // x: [mix, decay, volume] as the DSP currently has them, then the side's pan
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
@@ -337,11 +338,11 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
                   snapshot.postClipGain);
   for (int ch = 0; ch < 2; ch++) {
     const LoopSideSnapshot &side = snapshot.side[ch];
-    response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d],\"n\":[%d,%u,%lu,%lu,%lu],"
+    response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d,%.3f],\"n\":[%d,%u,%lu,%lu,%lu],"
                     "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f]}",
                     ch ? "," : "", side.audioState, static_cast<unsigned long>(side.length),
                     static_cast<unsigned long>(side.position), static_cast<unsigned long>(side.capacity),
-                    side.speed, side.level, side.reverse ? 1 : 0, side.notesState,
+                    side.speed, side.level, side.reverse ? 1 : 0, side.retention, side.notesState,
                     static_cast<unsigned>(side.noteCount), static_cast<unsigned long>(side.notesLengthMs),
                     static_cast<unsigned long>(side.notesPositionMs),
                     static_cast<unsigned long>(side.notesRevision), side.mode, side.octave, side.note,

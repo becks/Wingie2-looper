@@ -23,7 +23,7 @@ class LooperDSP : public decorator_dsp {
   uint8_t* chunks_[2][wingie_loop::Loop::kMaxChunks] = {};
   size_t chunkCount_ = 0;
   std::atomic<int> command_[2] {{0}, {0}};
-  std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.9f}, {0.9f}}, cross_[2] {{0}, {0}};
+  std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.8f}, {0.8f}}, cross_[2] {{0}, {0}};
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
@@ -104,12 +104,17 @@ public:
     out.speed = std::max(0.25f, std::min(2.0f, speed_[ch].load()));
     out.level = level_[ch].load();
     out.reverse = reverse_[ch].load();
+    out.retention = retention_[ch].load();
   }
   void peaks(int ch, uint8_t* out, size_t buckets) const {
     if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
   }
   size_t readLevels(uint32_t& from, uint8_t out[][wingie_loop::LevelMeter::kSize], size_t max) const {
     return meter_.read(from, out, max);
+  }
+  // Share of the loop kept on each overdub pass ("sound on sound"), 0-1.
+  void setRetention(int ch, float value) {
+    if (ch >= 0 && ch < 2) retention_[ch].store(std::max(0.0f, std::min(1.0f, value)));
   }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
@@ -122,7 +127,7 @@ public:
                                      : powf(2, (value-64)/63.0f));
         break;
       case 82: level_[ch].store(value/127.0f); break;
-      case 83: retention_[ch].store(value/127.0f); break;
+      case 83: setRetention(ch, value/127.0f); break;
       case 84: cross_[ch].store(0.25f * value/127.0f); break;
       case 85: reverse_[ch].store(value >= 64); break;
     }
