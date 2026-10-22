@@ -238,6 +238,14 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       }
       return true;
     }
+
+    if (strcmp(request.name, "pan") == 0) {
+      if (!quantizeParameter(request.value, wingie_config::kPanMin, wingie_config::kPanMax,
+                             wingie_config::kPanStep, canonical))
+        return false;
+      set_pan(ch, canonical);
+      return true;
+    }
     return false;
   }
 
@@ -334,6 +342,7 @@ void sendSettings(uint32_t id) {
   left.decay = dsp.getParamValue("/Wingie/left/decay");
   left.volume = dsp.getParamValue("volume0");
   left.threshold = left_thresh;
+  left.pan = pan[0];
 
   wingie_serial::ChannelSettings right;
   right.mode = Mode[1];
@@ -341,6 +350,7 @@ void sendSettings(uint32_t id) {
   right.decay = dsp.getParamValue("/Wingie/right/decay");
   right.volume = dsp.getParamValue("volume1");
   right.threshold = right_thresh;
+  right.pan = pan[1];
 
   wingie_serial::SharedSettings shared;
   shared.a3Hz = a3_freq;
@@ -485,6 +495,7 @@ void sendLoopStatus(uint32_t id) {
     side.mix = dsp.getParamValue(kMix[ch]);
     side.decay = dsp.getParamValue(kDecay[ch]);
     side.volume = dsp.getParamValue(kVolume[ch]);
+    side.pan = pan[ch];
   }
   wingie_serial::JsonResponse response;
   wingie_serial::encodeLoopStatus(response, id, snapshot);

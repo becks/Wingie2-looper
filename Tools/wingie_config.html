@@ -372,6 +372,26 @@
       grid-template-columns: repeat(6, minmax(0, 1fr));
     }
 
+    #wingie-config .wg-fields .wg-field-pan {
+      grid-column: 1 / -1;
+    }
+
+    #wingie-config .wg-pan-edit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #wingie-config .wg-pan-edit .wg-number {
+      width: 84px;
+      flex: none;
+    }
+
+    #wingie-config .wg-pan-edit input[type="range"] {
+      flex: 1;
+      min-width: 120px;
+    }
+
     #wingie-config .wg-shared-grid .wg-field-half {
       grid-column: span 3;
     }
@@ -653,6 +673,10 @@
               <label for="wg-left-threshold" data-i18n-zh="输入阈值" data-i18n-en="Input Threshold"></label>
               <input id="wg-left-threshold" class="wg-number" data-value-key="param:left:threshold" type="text" inputmode="decimal" disabled>
             </div>
+            <div class="wg-field wg-field-pan">
+              <label for="wg-left-pan" data-i18n-zh="声像（0 = 左，1 = 右）" data-i18n-en="Pan (0 = left, 1 = right)"></label>
+              <div class="wg-pan-edit"><input id="wg-left-pan" class="wg-number" data-value-key="param:left:pan" type="text" inputmode="decimal" disabled><input type="range" data-range-key="param:left:pan" data-i18n-aria-zh="左声像推杆" data-i18n-aria-en="Left pan slider" disabled></div>
+            </div>
           </div>
           <div class="wg-divider"></div>
           <div class="wg-bank-head">
@@ -683,6 +707,10 @@
             <div class="wg-field">
               <label for="wg-right-threshold" data-i18n-zh="输入阈值" data-i18n-en="Input Threshold"></label>
               <input id="wg-right-threshold" class="wg-number" data-value-key="param:right:threshold" type="text" inputmode="decimal" disabled>
+            </div>
+            <div class="wg-field wg-field-pan">
+              <label for="wg-right-pan" data-i18n-zh="声像（0 = 左，1 = 右）" data-i18n-en="Pan (0 = left, 1 = right)"></label>
+              <div class="wg-pan-edit"><input id="wg-right-pan" class="wg-number" data-value-key="param:right:pan" type="text" inputmode="decimal" disabled><input type="range" data-range-key="param:right:pan" data-i18n-aria-zh="右声像推杆" data-i18n-aria-en="Right pan slider" disabled></div>
             </div>
           </div>
           <div class="wg-divider"></div>
@@ -781,8 +809,10 @@
       const parameterSpecs = {
         "param:left:mode": {target: "left", name: "mode", path: ["left", "mode"], min: 0, max: 4, step: 1, immediate: true},
         "param:left:threshold": {target: "left", name: "threshold", path: ["left", "threshold"], min: 0.0825, max: 0.99, step: 0.0825},
+        "param:left:pan": {target: "left", name: "pan", path: ["left", "pan"], min: 0, max: 1, step: 0.01},
         "param:right:mode": {target: "right", name: "mode", path: ["right", "mode"], min: 0, max: 4, step: 1, immediate: true},
         "param:right:threshold": {target: "right", name: "threshold", path: ["right", "threshold"], min: 0.0825, max: 0.99, step: 0.0825},
+        "param:right:pan": {target: "right", name: "pan", path: ["right", "pan"], min: 0, max: 1, step: 0.01},
         "param:shared:a3_hz": {target: "shared", name: "a3_hz", path: ["shared", "a3_hz"], min: 358.08, max: 521.91, step: 0.01},
         "param:shared:tuning": {target: "shared", name: "tuning", path: ["shared", "tuning"], min: -1, max: 7, step: 1, immediate: true},
         "param:shared:pre_clip_gain": {target: "shared", name: "pre_clip_gain", path: ["shared", "pre_clip_gain"], min: 0.0825, max: 0.99, step: 0.0825},
@@ -1400,16 +1430,18 @@
         // MPE 开启时常规三通道路由不生效，对应字段置灰
         const midiChannelKey = key === "param:shared:midi_left" || key === "param:shared:midi_right" || key === "param:shared:midi_both";
         const mpeOn = Boolean(state.settings && state.settings.shared && state.settings.shared.mpe_enabled);
+        // Older firmware omits newer parameters (e.g. pan): keep those controls disabled.
+        const unsupported = Boolean(state.settings) && modelValueForKey(key) === undefined;
         root.querySelectorAll(`[data-value-key="${key}"]`).forEach((control) => {
           if (document.activeElement !== control || control.tagName === "SELECT") control.value = value;
-          control.disabled = !state.connected || !state.settings || state.saving || state.refreshing || (midiChannelKey && mpeOn);
+          control.disabled = !state.connected || !state.settings || state.saving || state.refreshing || unsupported || (midiChannelKey && mpeOn);
         });
         root.querySelectorAll(`[data-range-key="${key}"]`).forEach((control) => {
           control.min = spec.min;
           control.max = spec.max;
           control.step = spec.step;
           if (document.activeElement !== control) control.value = value;
-          control.disabled = !state.connected || !state.settings || state.saving || state.refreshing;
+          control.disabled = !state.connected || !state.settings || state.saving || state.refreshing || unsupported;
         });
       }
 

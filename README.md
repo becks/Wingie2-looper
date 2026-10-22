@@ -40,11 +40,22 @@ each audio loop restart flashes the side purple (white in Cave mode).
 
 ![Loop Monitor](doc/images/loop-monitor.png)
 
-[`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a read-only, single-file page that shows
+[`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
-level and direction, the panel keys and controls, and input/output levels. Open it from disk in
+level and direction, the panel keys and controls, and input/output levels. Its only control is each
+side's Pan slider (see below). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
+
+## Stereo pan
+
+Each side's output (resonator plus dry signal) can be placed anywhere in the stereo field with an
+equal-power pan after the resonator. By default the left side stays hard left and the right side hard
+right, exactly as before. Pan has no panel control: set it from the
+[USB configuration page](#wingie2-usb-configuration) (Pan field, 0 = left, 1 = right, saved with Save),
+from the Loop Monitor's Pan slider (saved by holding both Mode buttons for 3 s or by Save in the
+configuration page), or with MIDI CC 10 (MSB) / CC 42 (LSB) on that side's channel (the Both channel moves both sides;
+CC 10 = 64 is the center). A pan received over MIDI is also kept by the next Save.
 
 ![Wingie2 Front Small](https://user-images.githubusercontent.com/4593629/158756306-aa6c1218-f6ec-44c0-8c54-b04b49531801.jpg)
 
@@ -110,12 +121,12 @@ new revision; only a second conflict is reported as an error. Use Refresh to re-
 the confirmed “Save to Flash” action only when the current persistent settings should be written to
 flash.
 
-The page exposes independent Mode and Input Threshold controls for the left and right channels. It does
+The page exposes independent Mode, Input Threshold and Pan controls for the left and right channels. It does
 not display or edit Mix, Decay, or Volume: those are runtime-only shared physical controls on Wingie2
 and are not written to flash.
 
-Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode and Input
-Threshold, the MPE switch, line-input stereo/mono, the shared Ratio profile, and all three Cave banks
+Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode, Input
+Threshold and Pan, the MPE switch, line-input stereo/mono, the shared Ratio profile, and all three Cave banks
 for each channel, including frequency and mute. The shared Ratio profile's nine ratios are grouped into Voices 1/2/3, three ratios per
 voice; in Ratio polyphonic mode, the three voices use the ratios of Voices 1/2/3 respectively, and the
 “Copy Voice 1 to Voices 2&3” button copies Voice 1's ratios into the other two voices. Factory Ratio

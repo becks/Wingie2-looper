@@ -182,6 +182,18 @@ void MIDISetParam(int ch, byte number, byte value) {
     }
   }
 
+  if (number == CC_PAN or number == CC_PAN + 32) {
+    if (number == CC_PAN) pan_midi_value[ch][MSB] = value;
+    else pan_midi_value[ch][LSB] = value;
+
+    if (number == CC_PAN) {
+      // 0 hard left, 8192 (MSB 64) exact center, 16383 hard right.
+      int midiVal14Bit = (pan_midi_value[ch][MSB] << 7) | pan_midi_value[ch][LSB];
+      float v = midiVal14Bit <= 8192 ? midiVal14Bit / 16384. : 0.5 + (midiVal14Bit - 8192) / 16382.;
+      set_pan(ch, v);
+    }
+  }
+
   if (number == CC_VOL or number == CC_VOL + 32) {
     potValSampled[VOL] = potValRealtime[VOL];
     realtime_value_valid[VOL] = false;

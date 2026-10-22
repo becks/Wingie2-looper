@@ -50,6 +50,7 @@ struct ChannelSettings {
   float decay;
   float volume;
   float threshold;
+  float pan;  // post-resonator pan, 0 hard left .. 1 hard right
 };
 
 // get_settings shared 段参数快照
@@ -115,6 +116,7 @@ struct LoopSideSnapshot {
   float mix;
   float decay;
   float volume;
+  float pan;
 };
 
 struct LoopStatusSnapshot {
@@ -174,8 +176,10 @@ inline void encodeError(JsonResponse &response, uint32_t id, const char *code,
 }
 
 inline void appendChannelSettings(JsonResponse &response, const ChannelSettings &settings) {
-  response.append("{\"mode\":%d,\"mix\":%.4f,\"decay\":%.4f,\"volume\":%.4f,\"threshold\":%.4f}",
-                  settings.mode, settings.mix, settings.decay, settings.volume, settings.threshold);
+  response.append("{\"mode\":%d,\"mix\":%.4f,\"decay\":%.4f,\"volume\":%.4f,\"threshold\":%.4f,"
+                  "\"pan\":%.4f}",
+                  settings.mode, settings.mix, settings.decay, settings.volume, settings.threshold,
+                  settings.pan);
 }
 
 // 性能参数 limits（单一真值在 config_profiles.h；网页按 name 消费，缺失时回退页面默认）
@@ -183,6 +187,7 @@ inline void appendSettingsLimits(JsonResponse &response) {
   response.append(
       ",\"limits\":{\"mode\":[%g,%g,1],"
       "\"threshold\":[%g,%g,%g],"
+      "\"pan\":[%g,%g,%g],"
       "\"a3_hz\":[%g,%g,%g],"
       "\"tuning\":[%g,%g,1],"
       "\"pre_clip_gain\":[%g,%g,%g],"
@@ -194,6 +199,7 @@ inline void appendSettingsLimits(JsonResponse &response) {
       "\"line_input_mono\":[%g,%g,1]}",
       static_cast<float>(wingie_config::kModeMin), static_cast<float>(wingie_config::kModeMax),
       wingie_config::kThresholdMin, wingie_config::kThresholdMax, wingie_config::kThresholdStep,
+      wingie_config::kPanMin, wingie_config::kPanMax, wingie_config::kPanStep,
       wingie_config::kA3FrequencyMin, wingie_config::kA3FrequencyMax, wingie_config::kA3FrequencyStep,
       static_cast<float>(wingie_config::kTuningMin), static_cast<float>(wingie_config::kTuningMax),
       wingie_config::kPreClipGainMin, wingie_config::kClipGainMax, wingie_config::kThresholdStep,
@@ -319,7 +325,7 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // Compact on purpose: the monitor polls it several times a second over 115200 baud.
 // a: [state, length, position, capacity, speed, level, reverse] (frames)
 // n: [state, events, length_ms, position_ms, revision]
-// x: [mix, decay, volume] as the DSP currently has them
+// x: [mix, decay, volume] as the DSP currently has them, then the side's pan
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
@@ -332,14 +338,14 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
   for (int ch = 0; ch < 2; ch++) {
     const LoopSideSnapshot &side = snapshot.side[ch];
     response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d],\"n\":[%d,%u,%lu,%lu,%lu],"
-                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f]}",
+                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f]}",
                     ch ? "," : "", side.audioState, static_cast<unsigned long>(side.length),
                     static_cast<unsigned long>(side.position), static_cast<unsigned long>(side.capacity),
                     side.speed, side.level, side.reverse ? 1 : 0, side.notesState,
                     static_cast<unsigned>(side.noteCount), static_cast<unsigned long>(side.notesLengthMs),
                     static_cast<unsigned long>(side.notesPositionMs),
                     static_cast<unsigned long>(side.notesRevision), side.mode, side.octave, side.note,
-                    static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume);
+                    static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan);
   }
   response.append("],\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
                   snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");

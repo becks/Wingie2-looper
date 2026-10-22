@@ -29,6 +29,8 @@ static const GeneralSettingEntry kGeneralSettings[kDirtyCount] = {
   {"right_mode", kSettingUChar, kDirtyRightMode, "%s is saved, value is %d.\n", &Mode[1]},
   {"mpe_enabled", kSettingBool, kDirtyMpeEnabled, "%s is saved, value is %d.\n", &mpe_enabled},
   {"line_input_mono", kSettingBool, kDirtyLineInputMono, "%s is saved, value is %d.\n", &line_input_mono},
+  {"left_pan", kSettingFloat, kDirtyLeftPan, "%s is saved, value is %.4f\n", &pan[0]},
+  {"right_pan", kSettingFloat, kDirtyRightPan, "%s is saved, value is %.4f\n", &pan[1]},
 };
 
 bool save_general_preferences(Preferences &store) {
