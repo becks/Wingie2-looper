@@ -1,8 +1,10 @@
-# Wingie 2 — Two Asynchronous Loopers (Prototype)
+# Wingie 2 — Two Asynchronous Loopers
 
 Each mono input feeds an independent looper followed by the original resonator for
-that channel. The resonator modes, notes, and controls remain unchanged. The looper
-is an additional processing layer, not a new selector mode. It can be controlled over
+that channel; each side's output (resonator plus dry signal) then goes through a stereo
+pan (see the README; by default left stays hard left and right hard right). The resonator
+modes, notes, and controls remain unchanged. The looper is an additional processing
+layer, not a new selector mode. It can be controlled over
 TRS MIDI using the configured left and right channels (normally 1 and 2); the Both
 channel controls both loopers. Disable MPE in the USB configuration to access these
 CC messages.
@@ -43,6 +45,11 @@ run independently and are not synchronized.
 | 84 | Cross-feedback during overdub | 0–127 = 0–25% of the opposite output |
 | 85 | Reverse | 0–63 forward; 64–127 reverse |
 
+SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
+at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
+saved, and returns to 80% at power-on. Besides CC 83 it can be set from the Loop Monitor
+(below) or over USB serial with `set_param` `sos` (0–1 in 0.01 steps, clamped).
+
 Send CC80=1 on channel 1, then CC80=2 to close loop A. Repeat on channel 2 with a
 different duration for loop B. CC80=3 adds the live input and feedback to the existing
 loop. CC80=0 preserves the loop but returns to the live input. Recordings are volatile
@@ -56,8 +63,9 @@ nine input samples, and playback is linearly interpolated. Loop memory is alloca
 leaving 32 KB of heap and a 16 KB contiguous block for later allocations. The firmware
 links neither WiFi nor Bluetooth (not even `btStop()`), so the core releases the
 Bluetooth controller reserve and the WiFi statics are not included. The measured
-172,032-byte allocation (21 chunks per side) provides approximately 17.55 seconds per side;
-the boot log prints the actual figure on a `LOOPER_MEM allocated=` line. PSRAM is not
+172,032-byte allocation (21 chunks per side, measured on v4.30-duallooper.5) provides
+approximately 17.55 seconds per side; the boot log prints the actual figure on a
+`LOOPER_MEM allocated=` line. PSRAM is not
 available on the tested unit. Recording automatically switches to playback when the
 buffer is full; that side's LED then blinks red/white for about 0.75 s. During playback
 and overdub, the LED flashes purple (white in Cave mode) for about 120 ms each time the
@@ -67,9 +75,17 @@ change pitch. During overdub, the live input is mixed at -6 dB with the existing
 so new material is heard immediately; it is averaged and written once per low-rate
 buffer position.
 
-Prototype limitations: continuous looper parameters still require MIDI; there is no
-MIDI clock synchronization, audio persistence, or automatic pitch modulation. This is
-not yet a hardware-verified release.
+Limitations: continuous speed and level (beyond the panel steps) and cross-feedback still
+require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
+synchronization, audio persistence, time stretching, or automatic pitch modulation.
+
+## Loop Monitor
+
+`Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
+loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
+keys and controls, and input/output levels. Its only controls are each side's Pan and
+SOS sliders, written with `set_param`. Open it from disk in desktop Chrome or Edge.
+Pan and SOS require v4.30-duallooper.6 or later; the rest works from v4.30-duallooper.5.
 
 ## CPU headroom
 
@@ -90,12 +106,17 @@ AW9523, then run:
 arduino-cli compile --fqbn esp32:esp32:esp32 --libraries Libraries Wingie2
 ```
 
-The original Faust DSP is unchanged. Integration is implemented in the C++ architecture
-through `LooperDSP`. If `Wingie2.cpp` is regenerated with Faust, reapply the
+The looper is not part of the Faust DSP: it is implemented in the C++ architecture
+through `LooperDSP`. The only looper-era change to `Wingie2.dsp` is the post-resonator
+pan (`pan0`/`pan1`). If `Wingie2.cpp` is regenerated with Faust, reapply the
 `looper_dsp.h` include, wrap `fDSP` after it is created, allocate the looper before
-`fAudio->start`, and restore `setLooperControl`.
+`fAudio->start`, and restore the hand-written `Wingie2` methods declared in `Wingie2.h`:
+`setLooperControl`, `setLooperRetention`, `takeLooperFilled`, `takeLooperWrapped`,
+`takeLooperProfile`, `looperView`, `looperPeaks` and `readLevels`.
 
 A successful build is required before flashing. On the Wingie2, verify startup,
 bypass, two different loop lengths, automatic playback at the end of the buffer,
-overdub, clear, mode changes, MIDI, and stability at high decay settings. The device
-has not been flashed from this environment.
+overdub, clear, mode changes, MIDI, and stability at high decay settings. Each release is
+flashed and checked on hardware over USB serial before publishing; the MIDI
+CCs for pan (10/42) and SOS (83) added in v4.30-duallooper.6 have not yet been tested
+from a MIDI interface.
