@@ -56,6 +56,7 @@
 #define CC_MIX 11
 #define CC_DECAY 1
 #define CC_VOL 7
+#define CC_PAN 10
 #define CC_TUNING 23
 
 #define CC_MIDI_CH_L 20
@@ -198,6 +199,7 @@ struct ControlActivity {
 volatile ControlActivity controlActivity;
 volatile float a3_freq, currentPitchBend[2] = {0.0f, 0.0f};
 int midiVal[2][3][2], cave_freq_midi_value[2][9][2], a3_freq_midi_value[2]; // Channel, Type, (MSB, LSB)
+int pan_midi_value[2][2];  // Channel, (MSB, LSB)
 bool unq_caves_store = false;
 wingie_mpe::State mpe_state;
 MpeMonoState mpeMonoState[2];
@@ -291,6 +293,7 @@ float frequencies[NUM_NOTES+6];
 // global settings
 //
 float pre_clip_gain, post_clip_gain, left_thresh, right_thresh;
+float pan[2] = {wingie_config::kDefaultPan[0], wingie_config::kDefaultPan[1]};  // post-resonator pan per side
 bool save_routine_flag = false, stuff_saved = false, dirty[kDirtyCount], tuning_preferences_dirty = false;
 volatile bool preferences_save_requested = false;
 byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
@@ -450,6 +453,15 @@ void set_mode_led(byte ch) {
 void apply_line_input_mono() {
   line_input_mono_active = line_input_mono && source;
   dsp.setParamValue("line_mono", line_input_mono_active ? 1.0f : 0.0f);
+}
+
+// Post-resonator pan, set from MIDI CC10/42 or the config page; saved with the
+// general settings.
+void set_pan(byte ch, float value) {
+  if (fabsf(pan[ch] - value) <= 0.0001f) return;
+  pan[ch] = value;
+  dsp.setParamValue(ch ? "pan1" : "pan0", value);
+  dirty[kDirtyLeftPan + ch] = true;
 }
 
 void persist_line_input_mono_now() {

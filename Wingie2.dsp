@@ -108,6 +108,16 @@ vol_dry0 = (1 - mix0);
 vol_wet1 = mix1;
 vol_dry1 = (1 - mix1);
 
+// Post-resonator pan: places each side (wet + dry) in the stereo output with
+// equal-power gains. 0 is hard left, 1 hard right; the defaults keep today's
+// left-to-left, right-to-right routing.
+pan0 = hslider("pan0", 0, 0, 1, 0.01);
+pan1 = hslider("pan1", 1, 0, 1, 0.01);
+pan_gain_l(p) = cos(p * ma.PI / 2) : si.smoo;
+pan_gain_r(p) = sin(p * ma.PI / 2) : si.smoo;
+pan_sides(s0, s1) = s0 * pan_gain_l(pan0) + s1 * pan_gain_l(pan1),
+                    s0 * pan_gain_r(pan0) + s1 * pan_gain_r(pan1);
+
 mode0 = hslider("mode0", 0, 0, 1, 1);
 mode1 = hslider("mode1", 0, 0, 1, 1);
 
@@ -230,4 +240,5 @@ process = _,_
                     : _ * vol_wet0 * post_clip_gain, _ * vol_wet1 * post_clip_gain, _ * vol_dry0, _ * vol_dry1
                 //:> co.limiter_1176_R4_mono, co.limiter_1176_R4_mono
                 //:> aa.cubic1, aa.cubic1
-                        :> (_ * output_gain), (_ * output_gain);
+                        :> pan_sides
+                            : (_ * output_gain), (_ * output_gain);

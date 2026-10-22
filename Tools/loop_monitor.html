@@ -89,6 +89,12 @@
     .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
     .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: var(--muted); }
+    /* Pan and SOS are the controls the page writes (set_param); everything else is read-only. */
+    .control { display: inline-flex; align-items: center; gap: 8px; }
+    .control[hidden] { display: none; }
+    .control input { width: 120px; accent-color: var(--wave); }
+    .control b { min-width: 3.2em; text-align: right; }
+    .side-head .control { margin-left: auto; }
     .meta b { color: var(--text); font-weight: 600; }
 
     section h3 {
@@ -262,8 +268,11 @@
         mode (not in Cave mode).</p>
     </section>
     <footer>
-      Read-only view over USB (Web Serial, Chrome or Edge). Close it before using the Arduino
-      serial monitor or the web flasher. Requires firmware v4.30-duallooper.5 or later.
+      View over USB (Web Serial, Chrome or Edge). The only controls are each side's Pan and SOS:
+      Pan changes the running state (save it from the configuration page or by holding both Mode
+      buttons for 3 s); SOS is not saved and returns to 80% at power-on. Close the page before using
+      the Arduino serial monitor or the web flasher. Requires firmware v4.30-duallooper.5 or later;
+      Pan and SOS need v4.30-duallooper.6 or later.
     </footer>
   </main>
 
@@ -274,6 +283,7 @@
         <span class="meta">Mode <b data-mode>–</b></span>
         <span class="meta">Octave <b data-octave>–</b></span>
         <span class="meta">Note <b data-note>–</b></span>
+        <label class="meta control" data-pan-wrap hidden title="Stereo pan after the resonator. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s.">Pan <input type="range" min="0" max="1" step="0.01" data-pan aria-label="Pan"> <b data-pan-value>–</b></label>
       </div>
       <section>
         <h3>Audio loop <span class="badge empty" data-audio-state>EMPTY</span></h3>
@@ -284,6 +294,7 @@
           <span>Speed <b data-speed>–</b></span>
           <span>Level <b data-level>–</b></span>
           <span>Direction <b data-direction>–</b></span>
+          <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
       </section>
       <section>
@@ -314,6 +325,15 @@
     const PLAYED_FLASH_MS = 160;
     const CHANGED_MS = 1500;
     const NOTE_FLASH_MS = 250;
+    // While a slider is being dragged (and briefly after), polled values are
+    // ignored so the device's echo doesn't fight the pointer.
+    const CONTROL_HOLD_MS = 800;
+    // Side controls written with set_param. The slider works in its own units;
+    // the firmware takes 0-1 for both.
+    const CONTROLS = {
+      pan: {toDevice: (v) => v, fromDevice: (v) => v, label: panLabel},
+      sos: {toDevice: (v) => v / 100, fromDevice: (v) => Math.round(v * 100), label: (v) => v + "%"},
+    };
     // Panel ranges as the firmware applies them (decay in the DSP's units).
     const SLIDERS = [
       {key: "mix", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
@@ -353,6 +373,7 @@
       notesBusy: false,
       lastNotesMs: null,
       playedUntil: new Array(12).fill(0),
+      controls: {pan: {holdUntil: 0, wanted: null, busy: false}, sos: {holdUntil: 0, wanted: null, busy: false}},
       ui: null,
     }));
     let fps = 4900;
@@ -382,8 +403,53 @@
         ui.keys.appendChild(cell);
         return cell;
       });
+      for (const name of Object.keys(CONTROLS)) {
+        ui[name].addEventListener("input", () => {
+          const control = side.controls[name];
+          control.holdUntil = performance.now() + CONTROL_HOLD_MS;
+          control.wanted = Number(ui[name].value);
+          ui[name + "Value"].textContent = CONTROLS[name].label(control.wanted);
+          sendControl(side, name);
+        });
+      }
       elements.sides.appendChild(node);
       side.ui = ui;
+    }
+
+    // 0 hard left, 0.5 center, 1 hard right.
+    function panLabel(value) {
+      const offset = Math.round((value - 0.5) * 200);
+      if (offset === 0) return "C";
+      return (offset < 0 ? "L" : "R") + " " + Math.abs(offset);
+    }
+
+    // One set_param in flight per side and control; the latest slider value wins.
+    async function sendControl(side, name) {
+      const control = side.controls[name];
+      if (control.busy || control.wanted === null || !transport.connected) return;
+      const value = CONTROLS[name].toDevice(control.wanted);
+      control.wanted = null;
+      control.busy = true;
+      try {
+        await request("set_param", {target: side.name, name, value});
+      } catch (error) {
+        setMessage(name.toUpperCase() + " not applied: " + error.message, true);
+      } finally {
+        control.busy = false;
+        control.holdUntil = performance.now() + CONTROL_HOLD_MS;
+        sendControl(side, name);
+      }
+    }
+
+    // Shows a device value on its slider unless the player is moving it; firmware
+    // that doesn't send the value keeps the control hidden.
+    function renderControl(side, name, deviceValue, now) {
+      const ui = side.ui;
+      ui[name + "Wrap"].hidden = deviceValue === undefined;
+      if (deviceValue === undefined || now <= side.controls[name].holdUntil || document.activeElement === ui[name]) return;
+      const value = CONTROLS[name].fromDevice(deviceValue);
+      ui[name].value = value;
+      setValue(ui[name + "Value"], CONTROLS[name].label(value), now);
     }
 
     function setConnection(kind, text) {
@@ -613,7 +679,7 @@
           const side = view[index];
           side.status = {
             audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
-                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6]},
+                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7]},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
             mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
           };
@@ -817,6 +883,8 @@
         ui.notesPosition.textContent = notes.state === 1 || notes.state === 2
           ? (notesPosition(notes, elapsed) / 1000).toFixed(2) + " s" : "–";
         trackPlayed(side, elapsed, now);
+        renderControl(side, "pan", status.sliders[3], now);
+        renderControl(side, "sos", audio.sos, now);
       }
       ui.keyCells.forEach((cell, key) => {
         const held = status && (status.keys >> key) & 1;

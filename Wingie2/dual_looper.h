@@ -8,7 +8,7 @@ namespace wingie_loop {
 struct LoopView {
   int state = 0;
   uint32_t length = 0, position = 0, capacity = 0;
-  float speed = 1, level = 1;
+  float speed = 1, level = 1, retention = 0.8f;
   bool reverse = false;
 };
 class Loop {
@@ -68,7 +68,7 @@ private:
     overdubFeedbackSum_ = 0;
     overdubCount_ = 0;
   }
-  float retention_ = 0.9f;
+  float retention_ = 0.8f;
   // Decoded neighbours of the current frame; they change only every ~9 samples.
   static constexpr size_t kNoCache = ~size_t(0);
   size_t cachedIndex_ = kNoCache;

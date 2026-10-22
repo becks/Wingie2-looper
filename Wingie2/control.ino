@@ -218,6 +218,8 @@ void control(void *pvParameters) {
     prefs.putChar("alt_tuning_idx", -1);
     prefs.putBool("mpe_enabled", false);
     prefs.putBool("line_input_mono", false);
+    prefs.putFloat("left_pan", wingie_config::kDefaultPan[0]);
+    prefs.putFloat("right_pan", wingie_config::kDefaultPan[1]);
     prefs.putBool("unq_caves_store", false);
     for (int ch = 0; ch < 2; ch++) {
       for (int cave = 0; cave < 3; cave++) {
@@ -273,6 +275,14 @@ void control(void *pvParameters) {
   right_thresh = prefs.getFloat("right_thresh", wingie_config::kDefaultThreshold);
   dsp.setParamValue("right_thresh", right_thresh);
   Serial.printf("right_thresh = %.4f\n", right_thresh);
+
+  pan[0] = prefs.getFloat("left_pan", wingie_config::kDefaultPan[0]);
+  pan[1] = prefs.getFloat("right_pan", wingie_config::kDefaultPan[1]);
+  for (int ch = 0; ch < 2; ch++) {
+    if (!(pan[ch] >= wingie_config::kPanMin && pan[ch] <= wingie_config::kPanMax)) pan[ch] = wingie_config::kDefaultPan[ch];
+    dsp.setParamValue(ch ? "pan1" : "pan0", pan[ch]);
+  }
+  Serial.printf("pan = %.2f / %.2f\n", pan[0], pan[1]);
 
   for (int ch = 0; ch < 2; ch++) {
     for (int cave = 0; cave < 3; cave++) {

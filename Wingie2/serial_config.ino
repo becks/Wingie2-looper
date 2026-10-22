@@ -238,6 +238,21 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       }
       return true;
     }
+
+    // Looper sound on sound (as MIDI CC 83): runtime only, back to 80% at power-on.
+    if (strcmp(request.name, "sos") == 0) {
+      if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.01f, canonical)) return false;
+      dsp.setLooperRetention(ch, canonical);
+      return true;
+    }
+
+    if (strcmp(request.name, "pan") == 0) {
+      if (!quantizeParameter(request.value, wingie_config::kPanMin, wingie_config::kPanMax,
+                             wingie_config::kPanStep, canonical))
+        return false;
+      set_pan(ch, canonical);
+      return true;
+    }
     return false;
   }
 
@@ -334,6 +349,7 @@ void sendSettings(uint32_t id) {
   left.decay = dsp.getParamValue("/Wingie/left/decay");
   left.volume = dsp.getParamValue("volume0");
   left.threshold = left_thresh;
+  left.pan = pan[0];
 
   wingie_serial::ChannelSettings right;
   right.mode = Mode[1];
@@ -341,6 +357,7 @@ void sendSettings(uint32_t id) {
   right.decay = dsp.getParamValue("/Wingie/right/decay");
   right.volume = dsp.getParamValue("volume1");
   right.threshold = right_thresh;
+  right.pan = pan[1];
 
   wingie_serial::SharedSettings shared;
   shared.a3Hz = a3_freq;
@@ -468,6 +485,7 @@ void sendLoopStatus(uint32_t id) {
     side.speed = view.speed;
     side.level = view.level;
     side.reverse = view.reverse;
+    side.retention = view.retention;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();
@@ -485,6 +503,7 @@ void sendLoopStatus(uint32_t id) {
     side.mix = dsp.getParamValue(kMix[ch]);
     side.decay = dsp.getParamValue(kDecay[ch]);
     side.volume = dsp.getParamValue(kVolume[ch]);
+    side.pan = pan[ch];
   }
   wingie_serial::JsonResponse response;
   wingie_serial::encodeLoopStatus(response, id, snapshot);

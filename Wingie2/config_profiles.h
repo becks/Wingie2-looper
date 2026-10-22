@@ -38,6 +38,11 @@ static const float kDefaultA3Frequency = 440.0f;
 static const float kDefaultPreClipGain = 0.2475f;
 static const float kDefaultPostClipGain = 0.825f;
 static const float kDefaultThreshold = 0.4125f;
+// Post-resonator pan: 0 hard left, 1 hard right.
+static const float kPanMin = 0.0f;
+static const float kPanMax = 1.0f;
+static const float kPanStep = 0.01f;
+static const float kDefaultPan[2] = {0.0f, 1.0f};
 static const float kRatioMin = 0.125f;
 static const float kRatioMax = 32.0f;
 static const float kRatioStep = 0.001f;

@@ -78,6 +78,7 @@ static void testSettings() {
   left.decay = 2.5f;
   left.volume = 0.75f;
   left.threshold = 0.4125f;
+  left.pan = 0.0f;
 
   ChannelSettings right;
   right.mode = 2;
@@ -85,6 +86,7 @@ static void testSettings() {
   right.decay = 1.0f;
   right.volume = 0.5f;
   right.threshold = 0.99f;
+  right.pan = 0.75f;
 
   SharedSettings shared;
   shared.a3Hz = 440.0f;
@@ -101,12 +103,13 @@ static void testSettings() {
   encodeSettings(response, 2, true, true, true, left, right, shared);
   checkResponse(response,
       "{\"v\":1,\"id\":2,\"ok\":true,\"op\":\"get_settings\",\"source\":\"line\",\"dirty\":true,"
-      "\"dirty_all\":true,\"left\":{\"mode\":1,\"mix\":0.5000,\"decay\":2.5000,\"volume\":0.7500,\"threshold\":0.4125},"
-      "\"right\":{\"mode\":2,\"mix\":0.2500,\"decay\":1.0000,\"volume\":0.5000,\"threshold\":0.9900},"
+      "\"dirty_all\":true,\"left\":{\"mode\":1,\"mix\":0.5000,\"decay\":2.5000,\"volume\":0.7500,\"threshold\":0.4125,\"pan\":0.0000},"
+      "\"right\":{\"mode\":2,\"mix\":0.2500,\"decay\":1.0000,\"volume\":0.5000,\"threshold\":0.9900,\"pan\":0.7500},"
       "\"shared\":{\"a3_hz\":440.00,\"tuning\":-1,\"pre_clip_gain\":0.2475,\"post_clip_gain\":0.8250,"
       "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false},"
       "\"limits\":{\"mode\":[0,4,1],"
       "\"threshold\":[0.0825,0.99,0.0825],"
+      "\"pan\":[0,1,0.01],"
       "\"a3_hz\":[358.08,521.91,0.01],"
       "\"tuning\":[-1,7,1],"
       "\"pre_clip_gain\":[0.0825,0.99,0.0825],"
@@ -283,23 +286,23 @@ static void testLoopMonitor() {
   status.levels[1][0] = 0x01; status.levels[1][1] = 0x02;
   status.levels[2][0] = 0xff; status.levels[2][1] = 0x10;
   status.levels[3][0] = 0x0a; status.levels[3][1] = 0xab;
-  status.side[0] = {2, 86016, 4321, 86016, 1.0f, 0.5f, true, 2, 11, 17480, 250, 7, 1, -1, 48, 0x011,
-                    0.25f, 4.5f, 0.8f};
+  status.side[0] = {2, 86016, 4321, 86016, 1.0f, 0.5f, true, 0.8f, 2, 11, 17480, 250, 7, 1, -1, 48, 0x011,
+                    0.25f, 4.5f, 0.8f, 0.5f};
   status.side[1].speed = 2.0f;
   JsonResponse statusResponse;
   encodeLoopStatus(statusResponse, 5, status);
   checkResponse(statusResponse,
       "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,"
       "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
-      "{\"a\":[2,86016,4321,86016,1.000,0.500,1],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800]},"
-      "{\"a\":[0,0,0,0,2.000,0.000,0],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000]}],"
+      "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500]},"
+      "{\"a\":[0,0,0,0,2.000,0.000,0,0.000],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000]}],"
       "\"mono_active\":1,\"src\":\"line\",\"lv\":[\"00f0\",\"0102\",\"ff10\",\"0aab\"]}");
 
   // Worst case status fits a frame.
   for (int ch = 0; ch < 2; ch++) {
-    status.side[ch] = {3, 4294967295u, 4294967295u, 4294967295u, 2.0f, 1.0f, true,
+    status.side[ch] = {3, 4294967295u, 4294967295u, 4294967295u, 2.0f, 1.0f, true, -1.0f,
                        3, 65535, 4294967295u, 4294967295u, 4294967295u, 4, -2, 127, 4095,
-                       -1.0f, 10.0f, -1.0f};
+                       -1.0f, 10.0f, -1.0f, -1.0f};
   }
   status.ms = 4294967295u;
   status.threshold[0] = status.threshold[1] = -9.9999f;

@@ -191,8 +191,9 @@ class WingieConfigHtmlTest(unittest.TestCase):
 
     def test_has_complete_controls_and_omits_runtime_status(self):
         for target in ("left", "right"):
-            for name in ("mode", "threshold"):
+            for name in ("mode", "threshold", "pan"):
                 self.assertIn(f'param:{target}:{name}', self.source)
+            self.assertIn(f'data-range-key="param:{target}:pan"', self.source)
         for name in (
             "a3_hz",
             "tuning",
@@ -552,6 +553,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         # 固件编码端：named 扁平数组 [min,max,step]，数值单一真值在 config_profiles.h
         self.assertIn('"limits\\":{\\"mode\\":[%g,%g,1]', self.response_source)
         self.assertIn('"threshold\\":[%g,%g,%g]', self.response_source)
+        self.assertIn('"pan\\":[%g,%g,%g]', self.response_source)
         self.assertIn('"a3_hz\\":[%g,%g,%g]', self.response_source)
         self.assertIn('"tuning\\":[%g,%g,1]', self.response_source)
         self.assertIn('"pre_clip_gain\\":[%g,%g,%g]', self.response_source)
