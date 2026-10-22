@@ -14383,6 +14383,10 @@ void Wingie2::setLooperRetention(int ch, float value) {
     static_cast<LooperDSP*>(fDSP)->setRetention(ch, value);
 }
 
+void Wingie2::setLooperSpeed(int ch, float value) {
+    static_cast<LooperDSP*>(fDSP)->setSpeed(ch, value);
+}
+
 bool Wingie2::takeLooperFilled(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeFilled(ch);
 }

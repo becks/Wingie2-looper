@@ -15,8 +15,10 @@ to playback, D enables overdub, D# returns to bypass while preserving the loop, 
 holding E for one second clears the loop. A looper gesture suppresses the normal mode
 change and save actions associated with the Mode buttons. Holding both Mode buttons
 for three seconds without pressing a note continues to save preferences normally.
-While holding both Mode buttons, F selects 0.5× speed, F# selects 1×, and G selects
-2× on the keyboard's corresponding looper. G# lowers and A#/B♭ raises that side's
+While holding both Mode buttons, F and G move that side's loop speed one step down or
+up through pure-ratio fourths, fifths and octaves (1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2);
+holding F or G for half a second jumps an octave from the current speed instead (within
+0.25–2×), and F# returns to 1×. G# lowers and A#/B♭ raises that side's
 loop level in approximately 6% steps. B toggles reverse playback.
 
 ### Note loopers
@@ -44,6 +46,7 @@ run independently and are not synchronized.
 | 83 | Material retained during overdub (sound on sound) | 0–127; default approximately 80% |
 | 84 | Cross-feedback during overdub | 0–127 = 0–25% of the opposite output |
 | 85 | Reverse | 0–63 forward; 64–127 reverse |
+| 86 | Speed step | 0–127 in eight bands of 16: 1/4, 1/2, 2/3, 3/4, 1 (64), 4/3, 3/2, 2 |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -78,8 +81,8 @@ change pitch. During overdub, the live input is mixed at -6 dB with the existing
 so new material is heard immediately; it is averaged and written once per low-rate
 buffer position.
 
-Limitations: continuous speed and level (beyond the panel steps) and cross-feedback still
-require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
+Limitations: continuous speed and level (beyond the panel and Loop Monitor steps) and
+cross-feedback still require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
 synchronization, audio persistence, time stretching, or automatic pitch modulation.
 
 ## Loop Monitor
@@ -87,8 +90,10 @@ synchronization, audio persistence, time stretching, or automatic pitch modulati
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
 keys and controls, and input/output levels. Its only controls are each side's Pan and
-SOS sliders, written with `set_param`. Open it from disk in desktop Chrome or Edge.
-Pan and SOS require v4.30-duallooper.6 or later; the rest works from v4.30-duallooper.5.
+SOS sliders and speed step buttons (`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
+Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
+later (advertised as the `speed_steps` capability in `hello`); the rest works from
+v4.30-duallooper.5.
 
 ## CPU headroom
 
@@ -114,7 +119,7 @@ through `LooperDSP`. The only looper-era change to `Wingie2.dsp` is the post-res
 pan (`pan0`/`pan1`). If `Wingie2.cpp` is regenerated with Faust, reapply the
 `looper_dsp.h` include, wrap `fDSP` after it is created, allocate the looper before
 `fAudio->start`, and restore the hand-written `Wingie2` methods declared in `Wingie2.h`:
-`setLooperControl`, `setLooperRetention`, `takeLooperFilled`, `takeLooperWrapped`,
+`setLooperControl`, `setLooperRetention`, `setLooperSpeed`, `takeLooperFilled`, `takeLooperWrapped`,
 `takeLooperProfile`, `looperView`, `looperPeaks` and `readLevels`.
 
 A successful build is required before flashing. On the Wingie2, verify startup,

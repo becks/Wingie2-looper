@@ -2,6 +2,7 @@
 #pragma once
 #include "dual_looper.h"
 #include "level_meter.h"
+#include "speed_steps.h"
 #include <atomic>
 #include <Arduino.h>
 #include "esp_heap_caps.h"
@@ -126,6 +127,11 @@ public:
   void setRetention(int ch, float value) {
     if (ch >= 0 && ch < 2) retention_[ch].store(std::max(0.0f, std::min(1.0f, value)));
   }
+  // Exact speed (pitch) ratio, for the interval steps; CC 81 stays continuous.
+  void setSpeed(int ch, float value) {
+    if (ch >= 0 && ch < 2)
+      speed_[ch].store(std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kSpeedMax, value)));
+  }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
@@ -138,6 +144,7 @@ public:
         break;
       case 82: level_[ch].store(value/127.0f); break;
       case 83: setRetention(ch, value/127.0f); break;
+      case 86: setSpeed(ch, wingie_loop::kSpeedSteps[wingie_loop::speedStepFromCC(value)]); break;
       case 84: cross_[ch].store(0.25f * value/127.0f); break;
       case 85: reverse_[ch].store(value >= 64); break;
     }

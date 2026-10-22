@@ -1,5 +1,17 @@
 #include "device_state.h"
 
+// Panel speed change: unison flashes like 1x did, lower speeds like 0.5x, higher like 2x.
+void applyLooperPanelSpeed(byte ch, float speed, bool octave) {
+  using namespace wingie_loop;
+  dsp.setLooperSpeed(ch, speed);
+  int step = speedStepIndex(speed);
+  led_blink = octave ? 5 : 3;
+  led_blink_color = ledColor[step == kUnisonStep ? 0 : speed < 1 ? 1 : 3];
+  led_flash_timer = currentMillis;
+  Serial.printf("LOOPER_PANEL ch=%u speed=%.3f step=%s%s\n", ch + 1, speed,
+                step >= 0 ? speedStepName(step) : "none", octave ? " octave=1" : "");
+}
+
 void looperPanelCommand(byte ch, byte keyIndex) {
   looperPanelGesture = true;
   save_routine_flag = false;
@@ -17,15 +29,12 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     looperClearArmed[ch] = true;
     looperClearStarted[ch] = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u clear_armed=1\n", ch + 1);
-  } else if (keyIndex >= 5 && keyIndex <= 7) {
-    static const byte speedValues[3] = {0, 64, 127};
-    static const char *speedNames[3] = {"0.5x", "1x", "2x"};
-    byte speedIndex = keyIndex - 5;
-    dsp.setLooperControl(ch, 81, speedValues[speedIndex]);
-    led_blink = 3;
-    led_blink_color = ledColor[speedIndex == 0 ? 1 : speedIndex == 1 ? 0 : 3];
-    led_flash_timer = currentMillis;
-    Serial.printf("LOOPER_PANEL ch=%u speed=%s\n", ch + 1, speedNames[speedIndex]);
+  } else if (keyIndex == 6) {  // F#: back to 1x
+    looperSpeedKey[ch] = -1;
+    applyLooperPanelSpeed(ch, 1.0f, false);
+  } else if (keyIndex == 5 || keyIndex == 7) {  // F down, G up: see the hold check in control()
+    looperSpeedKey[ch] = keyIndex;
+    looperSpeedStarted[ch] = currentMillis;
   } else if (keyIndex == 8 || keyIndex == 10) {  // G# down, A#/Bb up
     int level = looperLevel[ch] + (keyIndex == 8 ? -8 : 8);
     looperLevel[ch] = constrain(level, 0, 127);
@@ -849,6 +858,23 @@ void control(void *pvParameters) {
         led_flash_timer = currentMillis;
         Serial.printf("LOOPER_PANEL ch=%u command=clear\n", ch + 1);
       }
+    }
+
+    // F/G: released within half a second steps one interval (4th, 5th, octave
+    // ladder); held that long jumps an octave from the current speed.
+    for (int ch = 0; ch < 2; ch++) {
+      int speedKey = looperSpeedKey[ch];
+      if (speedKey < 0) continue;
+      bool released = key[ch][speedKey];
+      bool held = currentMillis - looperSpeedStarted[ch] >= LOOPER_OCTAVE_HOLD_MS;
+      if (!released && !held) continue;
+      looperSpeedKey[ch] = -1;
+      wingie_loop::LoopView view;
+      dsp.looperView(ch, view);
+      bool up = speedKey == 7;
+      float speed = held ? wingie_loop::speedOctave(view.speed, up)
+                         : up ? wingie_loop::speedStepUp(view.speed) : wingie_loop::speedStepDown(view.speed);
+      applyLooperPanelSpeed(ch, speed, held);
     }
 
     for (int ch = 0; ch < 2; ch++) {

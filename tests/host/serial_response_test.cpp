@@ -17,7 +17,7 @@ static void testHello() {
   checkResponse(response,
       "{\"v\":1,\"id\":1,\"ok\":true,\"op\":\"hello\",\"device\":\"Wingie2\","
       "\"firmware\":\"dev\","
-      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\"],"
+      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\"],"
       "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":1024}}");
 
   JsonResponse longFirmware;

@@ -216,7 +216,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));
