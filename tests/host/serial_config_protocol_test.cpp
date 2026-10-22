@@ -90,6 +90,28 @@ static void testControlCountsCommand() {
   assert(error.code == kParseInvalidField);
 }
 
+static void testLoopMonitorCommands() {
+  Request status = parse("@{\"v\":1,\"id\":12,\"op\":\"loop_status\"}");
+  assert(status.operation == kOperationLoopStatus);
+
+  Request wave = parse("@{\"v\":1,\"id\":13,\"op\":\"loop_wave\",\"side\":\"right\"}");
+  assert(wave.operation == kOperationLoopWave);
+  assert(strcmp(wave.side, "right") == 0 && wave.offset == 0);
+
+  Request notes = parse("@{\"v\":1,\"id\":14,\"op\":\"loop_notes\",\"side\":\"left\",\"offset\":48}");
+  assert(notes.operation == kOperationLoopNotes);
+  assert(strcmp(notes.side, "left") == 0 && notes.offset == 48);
+
+  Request request;
+  ParseError error;
+  const char *noSide = "@{\"v\":1,\"id\":1,\"op\":\"loop_wave\"}";
+  assert(!parseRequestLine(noSide, strlen(noSide), request, error));
+  assert(error.code == kParseInvalidField);
+  const char *badOffset = "@{\"v\":1,\"id\":1,\"op\":\"loop_notes\",\"side\":\"left\",\"offset\":-1}";
+  assert(!parseRequestLine(badOffset, strlen(badOffset), request, error));
+  assert(error.code == kParseInvalidField);
+}
+
 static void testInvalidRequests() {
   Request request;
   ParseError error;
@@ -138,6 +160,7 @@ int main() {
   testCaveCommands();
   testSettingsCommands();
   testControlCountsCommand();
+  testLoopMonitorCommands();
   testInvalidRequests();
   return 0;
 }

@@ -4,6 +4,13 @@
 #include <stddef.h>
 #include <math.h>
 namespace wingie_loop {
+// Display snapshot of one audio loop for the Loop Monitor.
+struct LoopView {
+  int state = 0;
+  uint32_t length = 0, position = 0, capacity = 0;
+  float speed = 1, level = 1;
+  bool reverse = false;
+};
 class Loop {
 public:
   // Storage is a table of fixed-size chunks so one loop can span several
@@ -165,6 +172,22 @@ public:
   }
   size_t length() const { return length_; }
   size_t position() const { return position_; }
+  size_t capacity() const { return capacity_; }
+  // Peak magnitude (0-127, mu-law segment and step) of each of `buckets` equal
+  // slices of the loop. Called from another task while audio runs, so it may
+  // see a frame mid-update: display use only.
+  void peaks(uint8_t* out, size_t buckets) const {
+    size_t length = length_;
+    for (size_t b = 0; b < buckets; ++b) {
+      size_t begin = length * b / buckets, end = length * (b + 1) / buckets;
+      uint8_t peak = 0;
+      for (size_t i = begin; i < end; ++i) {
+        uint8_t magnitude = (uint8_t)~chunks_[i >> kChunkBits][i & (kChunkSize - 1)] & 0x7f;
+        if (magnitude > peak) peak = magnitude;
+      }
+      out[b] = peak;
+    }
+  }
   int state() const { return state_; }
   // True once after recording filled the buffer and switched itself to playback.
   bool takeFilled() { bool filled = filled_; filled_ = false; return filled; }

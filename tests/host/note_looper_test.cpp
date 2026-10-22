@@ -69,4 +69,23 @@ int main() {
   loop.finishRecording(20);
   assert(loop.lengthMs() == 36);
   assert((due(loop, 30) == std::vector<int>{2}));
+
+  // Monitor accessors: events, cycle position and a revision that tracks edits.
+  {
+    NoteLoop m;
+    uint32_t r = m.revision();
+    m.startRecording(1000);
+    assert(m.revision() != r && m.positionMs(1250) == 250);
+    r = m.revision();
+    m.record(1100, 5);
+    assert(m.revision() != r && m.eventTime(0) == 100 && m.eventKey(0) == 5);
+    assert(m.eventTime(1) == 0 && m.eventKey(1) == 0);
+    m.finishRecording(1400);
+    r = m.revision();
+    assert(m.positionMs(1400) == 0 && m.positionMs(1850) == 50);
+    m.stop();
+    assert(m.positionMs(1750) == 0 && m.revision() == r);
+    m.clear();
+    assert(m.revision() != r);
+  }
 }

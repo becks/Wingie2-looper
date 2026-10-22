@@ -14354,3 +14354,15 @@ bool Wingie2::takeLooperWrapped(int ch) {
 bool Wingie2::takeLooperProfile(uint32_t out[6]) {
     return static_cast<LooperDSP*>(fDSP)->takeProfile(out);
 }
+
+void Wingie2::looperView(int ch, wingie_loop::LoopView& out) {
+    static_cast<LooperDSP*>(fDSP)->view(ch, out);
+}
+
+void Wingie2::looperPeaks(int ch, uint8_t* out, size_t buckets) {
+    static_cast<LooperDSP*>(fDSP)->peaks(ch, out, buckets);
+}
+
+size_t Wingie2::readLevels(uint32_t& from, uint8_t out[][wingie_loop::LevelMeter::kSize], size_t max) {
+    return static_cast<LooperDSP*>(fDSP)->readLevels(from, out, max);
+}

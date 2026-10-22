@@ -437,6 +437,90 @@ void sendControlCounts(uint32_t id, bool reset) {
   sendJson(response);
 }
 
+// Loop Monitor reads. The note loopers belong to the control task and the audio
+// loops to the audio task; these snapshots may be slightly torn, which only
+// affects the display.
+void sendLoopStatus(uint32_t id) {
+  wingie_serial::LoopStatusSnapshot snapshot;
+  const uint32_t now = millis();
+  snapshot.ms = now;
+  snapshot.lineInputMono = line_input_mono;
+  snapshot.threshold[0] = left_thresh;
+  snapshot.threshold[1] = right_thresh;
+  snapshot.preClipGain = pre_clip_gain;
+  snapshot.postClipGain = post_clip_gain;
+  snapshot.lineMonoActive = line_input_mono_active;
+  snapshot.sourceLine = source;
+  // One monitor at a time: the read position lives here, not per client.
+  static uint32_t levelsRead = 0;
+  uint8_t levels[4][wingie_loop::LevelMeter::kSize];
+  snapshot.levelCount = dsp.readLevels(levelsRead, levels, wingie_serial::kLoopLevelEntries);
+  for (byte ch = 0; ch < 4; ch++) memcpy(snapshot.levels[ch], levels[ch], snapshot.levelCount);
+  snapshot.frameRate = 44100 / wingie_loop::Loop::rateDivision();  // dsp runs at 44.1 kHz
+  for (byte ch = 0; ch < 2; ch++) {
+    wingie_loop::LoopView view;
+    dsp.looperView(ch, view);
+    wingie_serial::LoopSideSnapshot &side = snapshot.side[ch];
+    side.audioState = view.state;
+    side.length = view.length;
+    side.position = view.position;
+    side.capacity = view.capacity;
+    side.speed = view.speed;
+    side.level = view.level;
+    side.reverse = view.reverse;
+    const wingie_loop::NoteLoop &notes = noteLoop[ch];
+    side.notesState = notes.state();
+    side.noteCount = notes.count();
+    side.notesLengthMs = notes.lengthMs();
+    side.notesPositionMs = notes.positionMs(now);
+    side.notesRevision = notes.revision();
+    side.mode = Mode[ch];
+    side.octave = oct[ch];
+    side.note = currentNote[ch];
+    side.keys = static_cast<uint16_t>(allKeys[ch] & 0x0fff);
+    // Static names: the decay paths are too long for std::string's inline buffer.
+    static const std::string kMix[2] = {"mix0", "mix1"};
+    static const std::string kDecay[2] = {"/Wingie/left/decay", "/Wingie/right/decay"};
+    static const std::string kVolume[2] = {"volume0", "volume1"};
+    side.mix = dsp.getParamValue(kMix[ch]);
+    side.decay = dsp.getParamValue(kDecay[ch]);
+    side.volume = dsp.getParamValue(kVolume[ch]);
+  }
+  wingie_serial::JsonResponse response;
+  wingie_serial::encodeLoopStatus(response, id, snapshot);
+  sendJson(response);
+}
+
+void sendLoopWave(uint32_t id, const char *sideName) {
+  const byte ch = caveSideIndex(sideName);
+  wingie_loop::LoopView view;
+  dsp.looperView(ch, view);
+  uint8_t peaks[wingie_serial::kLoopWaveBuckets];
+  dsp.looperPeaks(ch, peaks, wingie_serial::kLoopWaveBuckets);
+  wingie_serial::JsonResponse response;
+  wingie_serial::encodeLoopWave(response, id, ch ? "right" : "left", view.state, view.length,
+                                view.capacity, peaks, wingie_serial::kLoopWaveBuckets);
+  sendJson(response);
+}
+
+void sendLoopNotes(uint32_t id, const char *sideName, uint16_t offset) {
+  const byte ch = caveSideIndex(sideName);
+  const wingie_loop::NoteLoop &notes = noteLoop[ch];
+  const uint32_t revision = notes.revision();
+  const uint16_t total = notes.count();
+  uint32_t times[wingie_serial::kLoopNotesPage];
+  uint8_t keys[wingie_serial::kLoopNotesPage];
+  size_t count = 0;
+  for (uint16_t i = offset; i < total && count < wingie_serial::kLoopNotesPage; i++, count++) {
+    times[count] = notes.eventTime(i);
+    keys[count] = notes.eventKey(i);
+  }
+  wingie_serial::JsonResponse response;
+  wingie_serial::encodeLoopNotes(response, id, ch ? "right" : "left", notes.state(), total,
+                                 notes.lengthMs(), revision, offset, times, keys, count);
+  sendJson(response);
+}
+
 void sendQueued(uint32_t id, const char *operation, uint32_t revision) {
   wingie_serial::JsonResponse response;
   wingie_serial::encodeQueued(response, id, operation, revision);
@@ -476,6 +560,15 @@ void processSerialConfigFrame() {
       return;
     case wingie_serial::kOperationGetControls:
       sendControlCounts(request.id, request.reset);
+      return;
+    case wingie_serial::kOperationLoopStatus:
+      sendLoopStatus(request.id);
+      return;
+    case wingie_serial::kOperationLoopWave:
+      sendLoopWave(request.id, request.side);
+      return;
+    case wingie_serial::kOperationLoopNotes:
+      sendLoopNotes(request.id, request.side, request.offset);
       return;
     case wingie_serial::kOperationGetCave: {
       const byte ch = caveSideIndex(request.side);
