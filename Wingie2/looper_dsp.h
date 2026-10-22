@@ -1,6 +1,7 @@
 // Architecture extension; include after Faust dsp/decorator_dsp definitions.
 #pragma once
 #include "dual_looper.h"
+#include "level_meter.h"
 #include <atomic>
 #include <Arduino.h>
 #include "esp_heap_caps.h"
@@ -25,6 +26,7 @@ class LooperDSP : public decorator_dsp {
   std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.9f}, {0.9f}}, cross_[2] {{0}, {0}};
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   float feedback_[2][64] = {};
+  wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 #if LOOPER_PROFILE
   static constexpr uint32_t kProfileBlocks = 1378;  // about 2 s of 64-sample blocks
@@ -91,6 +93,24 @@ public:
 #endif
     return true;
   }
+  // Loop Monitor reads, from the serial task while audio runs (display only).
+  void view(int ch, wingie_loop::LoopView& out) const {
+    if (ch < 0 || ch > 1) return;
+    const wingie_loop::Loop& loop = loop_[ch];
+    out.state = loop.state();
+    out.length = loop.length();
+    out.position = loop.position();
+    out.capacity = loop.capacity();
+    out.speed = std::max(0.25f, std::min(2.0f, speed_[ch].load()));
+    out.level = level_[ch].load();
+    out.reverse = reverse_[ch].load();
+  }
+  void peaks(int ch, uint8_t* out, size_t buckets) const {
+    if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
+  }
+  size_t readLevels(uint32_t& from, uint8_t out[][wingie_loop::LevelMeter::kSize], size_t max) const {
+    return meter_.read(from, out, max);
+  }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
@@ -144,6 +164,9 @@ public:
 #else
     computeBlock(count, inputs, outputs);
 #endif
+    // Raw codec input and final output, for the Loop Monitor meters.
+    const float* signals[4] = {inputs[0], inputs[1], outputs[0], outputs[1]};
+    meter_.addBlock(signals, count);
   }
 private:
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {

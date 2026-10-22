@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wingie2 Loop Monitor</title>
+  <style>
+    /* Single file, no network: open it from disk in Chrome or Edge (Web Serial). */
+    :root {
+      color-scheme: dark;
+      --bg: #101114;
+      --panel: #181a1f;
+      --line: #2a2d35;
+      --text: #e8e6e1;
+      --muted: #8d9099;
+      --rec: #ff4d4d;
+      --play: #f2f2ee;
+      --dub: var(--rec);  /* overdub is recording too: same red */
+      --bypass: #ffd24d;
+      --wave: #d9d4c7;
+      --note: #7fd4c1;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    main { width: min(1180px, 100%); margin: 0 auto; }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      margin-bottom: 16px;
+    }
+
+    h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: 0.02em; }
+
+    .connection { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; }
+    .dot.on { background: #4fd36b; box-shadow: 0 0 8px #4fd36b; }
+    .dot.wait { background: var(--bypass); }
+
+    button {
+      font: inherit;
+      color: var(--text);
+      background: #262932;
+      border: 1px solid #3a3e4a;
+      border-radius: 6px;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #30343f; }
+    button:disabled { opacity: 0.5; cursor: default; }
+
+    #message { color: var(--muted); min-height: 1.45em; margin: -6px 0 12px; }
+    #message.error { color: var(--rec); }
+
+    .io-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+    @media (max-width: 820px) { .io-grid { grid-template-columns: 1fr; } }
+    .io-column { display: grid; gap: 8px; align-content: start; }
+    .strip-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+    .strip-head b { color: var(--text); font-weight: 600; }
+    .strip-head .clip { color: var(--rec); font-weight: 700; visibility: hidden; }
+    .strip-head .clip.on { visibility: visible; }
+    canvas.strip { height: 44px; }
+
+    .sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 820px) { .sides { grid-template-columns: 1fr; } }
+
+    .side {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+    .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .meta { color: var(--muted); }
+    .meta b { color: var(--text); font-weight: 600; }
+
+    section h3 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #111;
+      background: #444;
+    }
+    .badge.empty { background: #3a3d45; color: var(--muted); }
+    .badge.rec { background: var(--rec); }
+    .badge.play { background: var(--play); }
+    .badge.dub { background: var(--dub); }
+    .badge.bypass, .badge.stopped { background: var(--bypass); }
+
+    canvas {
+      display: block;
+      width: 100%;
+      background: #0c0d10;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    canvas.wave { height: 110px; }
+    canvas.roll { height: 150px; }
+
+    .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); }
+    .stats b { color: var(--text); font-weight: 600; }
+    /* A value the player just changed stays red briefly, then fades back. */
+    .meta b, .stats b { transition: color 700ms ease-out; }
+    .meta b.changed, .stats b.changed { color: var(--rec); transition: none; }
+
+    .sliders { display: grid; gap: 6px; }
+    /* Knobs in a narrow column, input/output strips take the rest of the row. */
+    .top { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 820px) { .top { grid-template-columns: 1fr; } }
+    #knobs { align-content: start; }
+    #knobs hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+    .segments { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; height: 8px; }
+    .segments i { background: #0c0d10; border: 1px solid var(--line); border-radius: 2px; }
+    .segments i.on { background: var(--wave); border-color: var(--wave); }
+    .segments.changed i.on { background: var(--rec); border-color: var(--rec); }
+    .slider { display: grid; grid-template-columns: 64px minmax(0, 1fr) 72px; align-items: center; gap: 10px; }
+    .slider span { color: var(--muted); font-size: 11px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.08em; }
+    .slider .track { height: 8px; background: #0c0d10; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .slider .fill { height: 100%; width: 0; background: var(--wave); transition: background 700ms ease-out; }
+    .slider .fill.changed { background: var(--rec); transition: none; }
+    .slider b { text-align: right; font-weight: 600; font-size: 13px; white-space: nowrap; transition: color 700ms ease-out; }
+    .slider b.changed { color: var(--rec); transition: none; }
+
+    .keys { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; height: 46px; }
+    .key {
+      border-radius: 4px;
+      background: #d9d6ce;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      font-size: 10px;
+      color: #333;
+      padding-bottom: 3px;
+      transition: background 60ms;
+    }
+    .key.black { background: #2c2f37; color: #999; }
+    .key.held { background: var(--bypass); color: #111; }
+    .key.played { background: var(--note); color: #111; }
+
+    footer { margin-top: 16px; color: var(--muted); font-size: 12px; }
+
+    .combos {
+      margin-top: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .combos h2 { margin: 0 0 4px; font-size: 16px; }
+    .combos p { margin: 0 0 10px; color: var(--muted); }
+    .combo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 6px 18px;
+    }
+    .combo { display: flex; gap: 10px; align-items: baseline; }
+    .combo kbd {
+      flex: 0 0 64px;
+      font: 600 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: center;
+      background: #262932;
+      border: 1px solid #3a3e4a;
+      border-radius: 4px;
+    }
+    .combo.notes kbd { border-color: var(--note); color: var(--note); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Wingie2 Loop Monitor</h1>
+      <span class="meta">Line input <b id="mono">–</b></span>
+      <div class="connection">
+        <span class="dot" id="dot"></span>
+        <span id="status">Disconnected</span>
+        <button id="connect" type="button">Connect</button>
+      </div>
+    </header>
+    <p id="message"></p>
+    <div class="top">
+    <section class="side sliders" id="knobs">
+      <div class="slider"><span>Mix</span><div class="track"><div class="fill" data-mix-fill></div></div><b data-mix>–</b></div>
+      <div class="slider"><span>Decay</span><div class="track"><div class="fill" data-decay-fill></div></div><b data-decay>–</b></div>
+      <div class="slider"><span>Volume</span><div class="track"><div class="fill" data-volume-fill></div></div><b data-volume>–</b></div>
+      <hr>
+      <div class="slider" title="Sequencer threshold, left"><span>Thresh L</span><div class="segments" id="step-threshold-left"></div><b id="value-threshold-left">–</b></div>
+      <div class="slider" title="Sequencer threshold, right"><span>Thresh R</span><div class="segments" id="step-threshold-right"></div><b id="value-threshold-right">–</b></div>
+      <div class="slider" title="Pre clip gain"><span>Pre gain</span><div class="segments" id="step-pre-gain"></div><b id="value-pre-gain">–</b></div>
+      <div class="slider" title="Post clip gain"><span>Post gain</span><div class="segments" id="step-post-gain"></div><b id="value-post-gain">–</b></div>
+    </section>
+    <section class="side" id="io">
+      <div class="io-grid">
+        <div class="io-column">
+          <h3 style="margin:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em">Input <span id="io-source"></span></h3>
+          <div data-strip="0"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+          <div data-strip="1"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+        </div>
+        <div class="io-column">
+          <h3 style="margin:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em">Output</h3>
+          <div data-strip="2"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+          <div data-strip="3"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+        </div>
+      </div>
+    </section>
+    </div>
+    <div class="sides" id="sides"></div>
+    <section class="combos">
+      <h2>Looper combos</h2>
+      <p>Hold both Mode buttons, then press a key on the side whose looper you want to control.</p>
+      <div class="combo-grid">
+        <div class="combo"><kbd>C</kbd><span>Audio: record</span></div>
+        <div class="combo"><kbd>C#</kbd><span>Audio: play</span></div>
+        <div class="combo"><kbd>D</kbd><span>Audio: overdub</span></div>
+        <div class="combo"><kbd>D#</kbd><span>Audio: bypass (keeps the loop)</span></div>
+        <div class="combo"><kbd>Hold E</kbd><span>Audio: clear the loop (1 s)</span></div>
+        <div class="combo"><kbd>F</kbd><span>Audio: speed 0.5×</span></div>
+        <div class="combo"><kbd>F#</kbd><span>Audio: speed 1×</span></div>
+        <div class="combo"><kbd>G</kbd><span>Audio: speed 2×</span></div>
+        <div class="combo"><kbd>G#</kbd><span>Audio: loop level −</span></div>
+        <div class="combo notes"><kbd>A</kbd><span>Notes: record → close and play → stop → play</span></div>
+        <div class="combo notes"><kbd>Hold A</kbd><span>Notes: clear the sequence (1 s)</span></div>
+        <div class="combo"><kbd>A#</kbd><span>Audio: loop level +</span></div>
+        <div class="combo"><kbd>B</kbd><span>Audio: reverse on/off</span></div>
+      </div>
+      <p style="margin: 10px 0 0">Outside the looper layer: hold the <b>left</b> Mode button and press a
+        key to set that side's sequencer threshold; hold the <b>right</b> Mode button and press a left
+        key for pre clip gain or a right key for post clip gain (C lowest, B highest).</p>
+      <p style="margin: 10px 0 0">After A starts a note recording, release the Mode buttons and play;
+        press both Mode buttons + A again to close the loop. Notes follow the current octave and
+        mode (not in Cave mode).</p>
+    </section>
+    <footer>
+      Read-only view over USB (Web Serial, Chrome or Edge). Close it before using the Arduino
+      serial monitor or the web flasher. Requires firmware v4.30-duallooper.5 or later.
+    </footer>
+  </main>
+
+  <template id="side-template">
+    <div class="side">
+      <div class="side-head">
+        <h2 data-name></h2>
+        <span class="meta">Mode <b data-mode>–</b></span>
+        <span class="meta">Octave <b data-octave>–</b></span>
+        <span class="meta">Note <b data-note>–</b></span>
+      </div>
+      <section>
+        <h3>Audio loop <span class="badge empty" data-audio-state>EMPTY</span></h3>
+        <canvas class="wave" data-wave></canvas>
+        <div class="stats">
+          <span>Length <b data-audio-length>–</b></span>
+          <span>Position <b data-audio-position>–</b></span>
+          <span>Speed <b data-speed>–</b></span>
+          <span>Level <b data-level>–</b></span>
+          <span>Direction <b data-direction>–</b></span>
+        </div>
+      </section>
+      <section>
+        <h3>Note loop <span class="badge empty" data-notes-state>EMPTY</span></h3>
+        <canvas class="roll" data-roll></canvas>
+        <div class="stats">
+          <span>Notes <b data-notes-count>–</b></span>
+          <span>Length <b data-notes-length>–</b></span>
+          <span>Position <b data-notes-position>–</b></span>
+        </div>
+      </section>
+      <section>
+        <h3>Keys</h3>
+        <div class="keys" data-keys></div>
+      </section>
+    </div>
+  </template>
+
+  <script>
+    "use strict";
+
+    const SIDES = ["left", "right"];
+    const MODES = ["Poly", "String", "Bar", "Cave", "Ratio"];
+    const KEY_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const BLACK = [1, 3, 6, 8, 10];
+    const STATUS_INTERVAL_MS = 150;
+    const WAVE_INTERVAL_MS = 700;
+    const PLAYED_FLASH_MS = 160;
+    const CHANGED_MS = 1500;
+    const NOTE_FLASH_MS = 250;
+    // Panel ranges as the firmware applies them (decay in the DSP's units).
+    const SLIDERS = [
+      {key: "mix", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
+      // The firmware bends the decay knob with fscale(curve -3.25), an exponent of
+      // 10^0.325; undo it so the bar follows the knob's travel.
+      {key: "decay", min: 0.1, max: 10, curve: Math.pow(10, 0.325), format: (v) => v.toFixed(2)},
+      {key: "volume", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
+    ];
+
+    const elements = {
+      connect: document.getElementById("connect"),
+      dot: document.getElementById("dot"),
+      status: document.getElementById("status"),
+      message: document.getElementById("message"),
+      sides: document.getElementById("sides"),
+    };
+
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const transport = {
+      port: null, reader: null, writer: null, readLoop: null,
+      buffer: "", nextId: 1, pending: new Map(), connected: false, closing: false,
+    };
+
+    // Latest device data and client-side extrapolation state per side.
+    const view = SIDES.map((name) => ({
+      name,
+      status: null,
+      statusAt: 0,
+      peaks: null,
+      waveLength: -1,
+      waveState: -1,
+      waveAt: 0,
+      waveBusy: false,
+      notes: [],
+      notesRevision: -1,
+      notesBusy: false,
+      lastNotesMs: null,
+      playedUntil: new Array(12).fill(0),
+      ui: null,
+    }));
+    let fps = 4900;
+    let lineMono;
+    let steps = null;
+    let pollTimer = null;
+    let statusBusy = false;
+
+    // ---------- UI scaffolding ----------
+
+    function buildSide(side) {
+      const node = document.getElementById("side-template").content.firstElementChild.cloneNode(true);
+      const ui = {};
+      node.querySelectorAll("*").forEach((element) => {
+        for (const attribute of element.getAttributeNames()) {
+          if (attribute.startsWith("data-")) {
+            const key = attribute.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+            ui[key] = element;
+          }
+        }
+      });
+      ui.name.textContent = side.name;
+      ui.keyCells = KEY_NAMES.map((label, index) => {
+        const cell = document.createElement("div");
+        cell.className = "key" + (BLACK.includes(index) ? " black" : "");
+        cell.textContent = label;
+        ui.keys.appendChild(cell);
+        return cell;
+      });
+      elements.sides.appendChild(node);
+      side.ui = ui;
+    }
+
+    function setConnection(kind, text) {
+      elements.dot.className = "dot" + (kind === "on" ? " on" : kind === "wait" ? " wait" : "");
+      elements.status.textContent = text;
+    }
+
+    function setMessage(text, error = false) {
+      elements.message.textContent = text;
+      elements.message.className = error ? "error" : "";
+    }
+
+    function seconds(frames) {
+      return (frames / fps).toFixed(2) + " s";
+    }
+
+    function noteName(midi) {
+      return KEY_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+    }
+
+    // Sets a value and marks it red for a moment when it changes (not on the first fill).
+    function setValue(element, text, now) {
+      if (element.textContent !== text) {
+        if (element.dataset.filled) element.dataset.changedUntil = now + CHANGED_MS;
+        element.textContent = text;
+        element.dataset.filled = "1";
+      }
+      element.classList.toggle("changed", Number(element.dataset.changedUntil || 0) > now);
+    }
+
+    function audioBadge(state, length) {
+      if (state === 1) return ["REC", "rec"];
+      if (state === 2) return ["PLAY", "play"];
+      if (state === 3) return ["OVERDUB", "dub"];
+      return length > 0 ? ["BYPASS", "bypass"] : ["EMPTY", "empty"];
+    }
+
+    function notesBadge(state) {
+      return [["EMPTY", "empty"], ["REC", "rec"], ["PLAY", "play"], ["STOPPED", "stopped"]][state] || ["?", "empty"];
+    }
+
+    function setBadge(element, [text, kind]) {
+      element.textContent = text;
+      element.className = "badge " + kind;
+    }
+
+    // ---------- Serial transport (same framing as wingie_config.html) ----------
+
+    async function readSerial() {
+      try {
+        while (!transport.closing && transport.port && transport.port.readable) {
+          transport.reader = transport.port.readable.getReader();
+          try {
+            while (true) {
+              const {value, done} = await transport.reader.read();
+              if (done) break;
+              transport.buffer += decoder.decode(value, {stream: true});
+              if (transport.buffer.length > 16384) {
+                transport.buffer = transport.buffer.slice(transport.buffer.lastIndexOf("\n") + 1);
+              }
+              let newline;
+              while ((newline = transport.buffer.indexOf("\n")) >= 0) {
+                const line = transport.buffer.slice(0, newline).trim();
+                transport.buffer = transport.buffer.slice(newline + 1);
+                if (line.startsWith("<")) receive(line.slice(1));
+              }
+            }
+          } finally {
+            transport.reader.releaseLock();
+            transport.reader = null;
+          }
+        }
+      } catch (error) {
+        if (transport.connected) lost(error);
+      }
+    }
+
+    function receive(text) {
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        return;
+      }
+      const pending = transport.pending.get(payload.id);
+      if (!pending) return;
+      transport.pending.delete(payload.id);
+      clearTimeout(pending.timer);
+      if (payload.ok) pending.resolve(payload);
+      else {
+        const error = new Error((payload.error && payload.error.code) || "device_error");
+        error.code = payload.error && payload.error.code;
+        pending.reject(error);
+      }
+    }
+
+    function request(op, fields = {}, timeout = 2500) {
+      const id = transport.nextId++;
+      const line = "@" + JSON.stringify({v: 1, id, op, ...fields}) + "\n";
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          transport.pending.delete(id);
+          reject(new Error(op + " timeout"));
+        }, timeout);
+        transport.pending.set(id, {resolve, reject, timer});
+        transport.writer.write(encoder.encode(line)).catch((error) => {
+          clearTimeout(timer);
+          transport.pending.delete(id);
+          reject(error);
+        });
+      });
+    }
+
+    async function helloWhenReady() {
+      // Opening the port resets the Wingie; it answers about 3 s later.
+      const deadline = Date.now() + 9000;
+      while (true) {
+        try {
+          return await request("hello", {}, 1000);
+        } catch (error) {
+          const retry = error.code === "busy" || / timeout$/.test(error.message);
+          if (!retry || Date.now() > deadline) throw error;
+          setConnection("wait", "Wingie2 is starting…");
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+    }
+
+    async function connect() {
+      elements.connect.disabled = true;
+      setMessage("");
+      if (!("serial" in navigator)) {
+        setMessage("This browser has no Web Serial: use Chrome or Edge on a desktop.", true);
+        elements.connect.disabled = false;
+        return;
+      }
+      try {
+        transport.port = await navigator.serial.requestPort();
+        await transport.port.open({baudRate: 115200});
+        transport.writer = transport.port.writable.getWriter();
+        transport.closing = false;
+        transport.readLoop = readSerial();
+        setConnection("wait", "Connecting…");
+        const hello = await helloWhenReady();
+        if (hello.device !== "Wingie2") throw new Error("not a Wingie2");
+        try {
+          await request("loop_status");
+        } catch (error) {
+          if (error.code === "unknown_operation") {
+            throw new Error("this firmware has no Loop Monitor support, flash v4.30-duallooper.5 or later");
+          }
+          throw error;
+        }
+        transport.connected = true;
+        setConnection("on", "Connected · " + hello.firmware);
+        elements.connect.textContent = "Disconnect";
+        elements.connect.disabled = false;
+        for (const side of view) {
+          side.waveLength = -1;
+          side.notesRevision = -1;
+        }
+        for (const state of knobState) state.shown = state.reference = null;
+        io.queue = [[], [], [], []];
+        io.history = [[], [], [], []];
+        pollTimer = setInterval(pollStatus, STATUS_INTERVAL_MS);
+        pollStatus();
+      } catch (error) {
+        await disconnect();
+        setMessage("Connection failed: " + error.message, true);
+      }
+    }
+
+    async function disconnect() {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      transport.connected = false;
+      transport.closing = true;
+      for (const pending of transport.pending.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("disconnected"));
+      }
+      transport.pending.clear();
+      try { if (transport.reader) await transport.reader.cancel(); } catch {}
+      try { if (transport.readLoop) await transport.readLoop; } catch {}
+      try {
+        if (transport.writer) transport.writer.releaseLock();
+        if (transport.port) await transport.port.close();
+      } catch {}
+      transport.writer = null;
+      transport.port = null;
+      transport.buffer = "";
+      statusBusy = false;
+      for (const side of view) side.waveBusy = side.notesBusy = false;
+      elements.connect.textContent = "Connect";
+      elements.connect.disabled = false;
+      setConnection("off", "Disconnected");
+    }
+
+    function lost(error) {
+      disconnect().then(() => setMessage("Connection lost: " + error.message, true));
+    }
+
+    elements.connect.addEventListener("click", () => {
+      if (transport.connected) disconnect();
+      else connect();
+    });
+
+    // ---------- Polling ----------
+
+    async function pollStatus() {
+      if (!transport.connected || statusBusy) return;
+      statusBusy = true;
+      try {
+        const status = await request("loop_status");
+        const now = performance.now();
+        fps = status.fps || fps;
+        lineMono = status.mono;
+        if (status.lv) {
+          io.monoActive = !!status.mono_active;
+          io.source = status.src || "";
+          status.lv.forEach((hex, channel) => {
+            for (let i = 0; i + 1 < hex.length; i += 2) io.queue[channel].push(parseInt(hex.substr(i, 2), 16));
+          });
+        }
+        if (status.t && status.g) steps = [status.t[0], status.t[1], status.g[0], status.g[1]];
+        status.sides.forEach((raw, index) => {
+          const side = view[index];
+          side.status = {
+            audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
+                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6]},
+            notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
+            mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
+          };
+          side.statusAt = now;
+          refreshWave(side, now);
+          refreshNotes(side);
+        });
+        setMessage("");
+      } catch (error) {
+        if (transport.connected) setMessage("Waiting for the Wingie: " + error.message, true);
+      } finally {
+        statusBusy = false;
+      }
+    }
+
+    // The waveform only changes while recording or overdubbing, or when the loop is
+    // cleared or replaced, so fetch it on those events instead of on every poll.
+    function refreshWave(side, now) {
+      const audio = side.status.audio;
+      const writing = audio.state === 1 || audio.state === 3;
+      const changed = audio.length !== side.waveLength || audio.state !== side.waveState;
+      if (side.waveBusy || !(changed || (writing && now - side.waveAt > WAVE_INTERVAL_MS))) return;
+      side.waveBusy = true;
+      side.waveAt = now;
+      request("loop_wave", {side: side.name})
+        .then((wave) => {
+          const peaks = new Uint8Array(wave.peaks.length / 2);
+          for (let i = 0; i < peaks.length; i++) peaks[i] = parseInt(wave.peaks.substr(i * 2, 2), 16);
+          side.peaks = peaks;
+          side.waveLength = wave.length;
+          side.waveState = wave.state;
+        })
+        .catch(() => {})
+        .finally(() => { side.waveBusy = false; });
+    }
+
+    async function refreshNotes(side) {
+      const revision = side.status.notes.revision;
+      if (side.notesBusy || revision === side.notesRevision) return;
+      side.notesBusy = true;
+      try {
+        const events = [];
+        let page;
+        do {
+          page = await request("loop_notes", {side: side.name, offset: events.length});
+          if (page.revision !== revision && events.length) break;  // changed mid-read, retry next poll
+          for (const [time, key] of page.events) events.push({time, key});
+        } while (page.events.length && events.length < page.count);
+        if (page.revision === revision || !events.length) {
+          side.notes = events;
+          side.notesRevision = page.revision;
+        }
+      } catch {
+      } finally {
+        side.notesBusy = false;
+      }
+    }
+
+    // ---------- Rendering ----------
+
+    function fitCanvas(canvas) {
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.round(canvas.clientWidth * ratio);
+      const height = Math.round(canvas.clientHeight * ratio);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      const context = canvas.getContext("2d");
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, width, height);
+      return {context, width, height, ratio};
+    }
+
+    function colorFor(state) {
+      const style = getComputedStyle(document.documentElement);
+      if (state === 1) return style.getPropertyValue("--rec");
+      if (state === 3) return style.getPropertyValue("--dub");
+      return style.getPropertyValue("--wave");
+    }
+
+    // Extrapolated play position between polls, in frames.
+    function audioPosition(audio, elapsedMs) {
+      if (audio.state !== 2 && audio.state !== 3) return audio.position;
+      if (!audio.length) return 0;
+      const delta = (elapsedMs / 1000) * fps * audio.speed * (audio.reverse ? -1 : 1);
+      return (((audio.position + delta) % audio.length) + audio.length) % audio.length;
+    }
+
+    function notesPosition(notes, elapsedMs) {
+      if (notes.state === 1) return notes.positionMs + elapsedMs;
+      if (notes.state !== 2 || !notes.lengthMs) return 0;
+      return (notes.positionMs + elapsedMs) % notes.lengthMs;
+    }
+
+    function drawWave(side, elapsed) {
+      const {context, width, height, ratio} = fitCanvas(side.ui.wave);
+      const audio = side.status && side.status.audio;
+      const middle = height / 2;
+      context.fillStyle = "#1d2027";
+      context.fillRect(0, middle, width, 1);
+      if (!audio || !audio.capacity) return;
+      // While recording the loop grows across the whole buffer; afterwards it fills the width.
+      const span = audio.state === 1 ? audio.capacity : Math.max(audio.length, 1);
+      const drawnWidth = width * Math.min(1, side.waveLength > 0 ? side.waveLength / span : 0);
+      if (side.peaks && side.waveLength > 0) {
+        context.fillStyle = colorFor(audio.state);
+        const count = side.peaks.length;
+        const barWidth = drawnWidth / count;
+        for (let i = 0; i < count; i++) {
+          // mu-law magnitude (0-127) is roughly logarithmic: map it straight to height.
+          const h = Math.max(1, (side.peaks[i] / 127) * (height / 2 - 4));
+          context.fillRect(i * barWidth, middle - h, Math.max(1, barWidth - 0.5 * ratio), h * 2);
+        }
+      }
+      if (audio.state === 1) {
+        context.fillStyle = "rgba(255,77,77,0.12)";
+        context.fillRect(0, 0, width * Math.min(1, audio.length / audio.capacity), height);
+      }
+      if ((audio.state === 2 || audio.state === 3) && audio.length) {
+        const x = (audioPosition(audio, elapsed) / audio.length) * width;
+        context.fillStyle = audio.state === 3 ? colorFor(3) : "#ffffff";
+        context.fillRect(x - ratio, 0, 2 * ratio, height);
+      }
+    }
+
+    function drawRoll(side, elapsed, now) {
+      const {context, width, height, ratio} = fitCanvas(side.ui.roll);
+      const notes = side.status && side.status.notes;
+      const rowHeight = height / 12;
+      for (let key = 0; key < 12; key++) {
+        context.fillStyle = BLACK.includes(key) ? "#0f1013" : "#14161b";
+        context.fillRect(0, height - (key + 1) * rowHeight, width, rowHeight);
+      }
+      if (!notes || notes.state === 0) return;
+      const position = notesPosition(notes, elapsed);
+      // While recording, the timeline is the elapsed time plus some room to grow.
+      const span = notes.state === 1 ? Math.max(4000, position * 1.25) : Math.max(notes.lengthMs, 1);
+      const style = getComputedStyle(document.documentElement);
+      const noteColor = notes.state === 1 ? style.getPropertyValue("--rec") : style.getPropertyValue("--note");
+      const flashColor = style.getPropertyValue("--rec");
+      const blockWidth = Math.max(3 * ratio, width * 0.006);
+      for (const event of side.notes) {
+        const x = (event.time / span) * width;
+        const y = height - (event.key + 1) * rowHeight;
+        // A note the cursor just played flashes red.
+        context.fillStyle = event.flashUntil > now ? flashColor : noteColor;
+        context.fillRect(x, y + 1, blockWidth, rowHeight - 2);
+      }
+      if (notes.state === 1 || notes.state === 2) {
+        const x = (position / span) * width;
+        context.fillStyle = "#ffffff";
+        context.fillRect(x - ratio / 2, 0, ratio, height);
+      }
+    }
+
+    // Light up keys the note loop just played (detected from the cursor crossing events).
+    function trackPlayed(side, elapsed, now) {
+      const notes = side.status && side.status.notes;
+      if (!notes || notes.state !== 2 || !notes.lengthMs) {
+        side.lastNotesMs = null;
+        return;
+      }
+      const position = notesPosition(notes, elapsed);
+      const previous = side.lastNotesMs;
+      side.lastNotesMs = position;
+      if (previous === null || position === previous) return;
+      const wrapped = position < previous;
+      for (const event of side.notes) {
+        const crossed = wrapped
+          ? event.time > previous || event.time <= position
+          : event.time > previous && event.time <= position;
+        if (crossed) {
+          side.playedUntil[event.key] = now + PLAYED_FLASH_MS;
+          event.flashUntil = now + NOTE_FLASH_MS;
+        }
+      }
+    }
+
+    function renderSide(side, now) {
+      const ui = side.ui;
+      const status = side.status;
+      const elapsed = status && transport.connected ? now - side.statusAt : 0;
+      if (status) {
+        const {audio, notes} = status;
+        setValue(ui.mode, String(MODES[status.mode] || status.mode), now);
+        setValue(ui.octave, (status.octave > 0 ? "+" : "") + status.octave, now);
+        ui.note.textContent = noteName(status.note);
+        setBadge(ui.audioState, audioBadge(audio.state, audio.length));
+        // Lengths and positions run continuously while recording or playing: not highlighted.
+        ui.audioLength.textContent = audio.state === 1
+          ? seconds(audio.length) + " / " + seconds(audio.capacity)
+          : audio.length ? seconds(audio.length) : "–";
+        ui.audioPosition.textContent = audio.length && audio.state >= 2 ? seconds(audioPosition(audio, elapsed)) : "–";
+        setValue(ui.speed, audio.speed.toFixed(2).replace(/\.?0+$/, "") + "×", now);
+        setValue(ui.level, Math.round(audio.level * 100) + "%", now);
+        setValue(ui.direction, audio.reverse ? "Reverse" : "Forward", now);
+        setBadge(ui.notesState, notesBadge(notes.state));
+        setValue(ui.notesCount, String(notes.count), now);
+        setValue(ui.notesLength, notes.lengthMs ? (notes.lengthMs / 1000).toFixed(2) + " s" : "–", now);
+        ui.notesPosition.textContent = notes.state === 1 || notes.state === 2
+          ? (notesPosition(notes, elapsed) / 1000).toFixed(2) + " s" : "–";
+        trackPlayed(side, elapsed, now);
+      }
+      ui.keyCells.forEach((cell, key) => {
+        const held = status && (status.keys >> key) & 1;
+        cell.classList.toggle("held", !!held);
+        cell.classList.toggle("played", !held && side.playedUntil[key] > now);
+      });
+      drawWave(side, elapsed);
+      drawRoll(side, elapsed, now);
+    }
+
+    // The three panel knobs drive both sides; MIDI or the config page can split
+    // them, in which case the value shows as "left / right".
+    const knobs = {};
+    document.querySelectorAll("#knobs [data-mix], #knobs [data-mix-fill], #knobs [data-decay], #knobs [data-decay-fill], #knobs [data-volume], #knobs [data-volume-fill]")
+      .forEach((element) => {
+        const name = element.getAttributeNames().find((a) => a.startsWith("data-")).slice(5);
+        knobs[name.replace(/-fill$/, "Fill")] = element;
+      });
+
+    // Pots jitter by a fraction of a percent, so values only redraw past a small
+    // dead band and turn red only after a real move of the knob.
+    const KNOB_DEADBAND = 0.01;
+    const KNOB_MOVED = 0.03;
+    const knobState = SLIDERS.map(() => ({shown: null, reference: null, changedUntil: 0}));
+
+    function knobShare(slider, value) {
+      let share = Math.min(1, Math.max(0, (value - slider.min) / (slider.max - slider.min)));
+      return slider.curve ? Math.pow(share, 1 / slider.curve) : share;
+    }
+
+    function renderKnobs(now) {
+      const [left, right] = view.map((side) => side.status && side.status.sliders);
+      if (!left) return;
+      SLIDERS.forEach((slider, index) => {
+        const a = left[index];
+        if (a === undefined) return;
+        const b = right ? right[index] : a;
+        const state = knobState[index];
+        const share = knobShare(slider, a);
+        const split = Math.abs(share - knobShare(slider, b)) >= KNOB_MOVED;
+        if (state.shown === null || Math.abs(share - state.shown) >= KNOB_DEADBAND || split !== state.split) {
+          knobs[slider.key].textContent = split ? slider.format(a) + " / " + slider.format(b) : slider.format(a);
+          knobs[slider.key + "Fill"].style.width = (share * 100).toFixed(1) + "%";
+          state.shown = share;
+          state.split = split;
+        }
+        if (state.reference === null) state.reference = share;
+        else if (Math.abs(share - state.reference) >= KNOB_MOVED) {
+          state.reference = share;
+          state.changedUntil = now + CHANGED_MS;
+        }
+        const changed = state.changedUntil > now;
+        knobs[slider.key].classList.toggle("changed", changed);
+        knobs[slider.key + "Fill"].classList.toggle("changed", changed);
+      });
+    }
+
+    const monoElement = document.getElementById("mono");
+
+    // Threshold and clip gains are set in 12 steps, one per key (Mode button + key).
+    const STEPPED = [
+      {id: "threshold-left", base: 0.0825, step: 0.0825},
+      {id: "threshold-right", base: 0.0825, step: 0.0825},
+      {id: "pre-gain", base: 0.0825, step: 0.0825},
+      {id: "post-gain", base: 0.385, step: 0.055},
+    ].map((item) => {
+      const bar = document.getElementById("step-" + item.id);
+      const cells = KEY_NAMES.map(() => bar.appendChild(document.createElement("i")));
+      return {...item, bar, cells, label: document.getElementById("value-" + item.id)};
+    });
+
+    function renderSteps(now) {
+      if (!steps) return;
+      STEPPED.forEach((item, index) => {
+        const value = steps[index];
+        const key = Math.min(11, Math.max(0, Math.round((value - item.base) / item.step)));
+        setValue(item.label, value.toFixed(2) + " · " + KEY_NAMES[key], now);
+        item.cells.forEach((cell, cellIndex) => cell.classList.toggle("on", cellIndex <= key));
+        item.bar.classList.toggle("changed", item.label.classList.contains("changed"));
+      });
+    }
+
+    // ---------- Input / output strips ----------
+    // Each level entry covers 8 blocks of 64 samples; the device sends them in bursts
+    // with every status poll, so they are played out at their own rate for a smooth scroll.
+    const LEVEL_RATE = 44100 / 64 / 8;
+    const HISTORY = Math.round(LEVEL_RATE * 5);
+    const CLIP_HOLD_MS = 1500;
+    const io = {
+      monoActive: false,
+      source: "",
+      queue: [[], [], [], []],
+      history: [[], [], [], []],
+      budget: 0,
+      lastFrame: 0,
+      clipUntil: [0, 0, 0, 0],
+      strips: [...document.querySelectorAll("[data-strip]")].map((element) => ({
+        element,
+        canvas: element.querySelector("canvas"),
+        label: element.querySelector("[data-label]"),
+        db: element.querySelector("[data-db]"),
+        clip: element.querySelector("[data-clip]"),
+      })),
+      sourceLabel: document.getElementById("io-source"),
+    };
+
+    function levelDb(code) {
+      return code >= 255 ? 0 : code / 4 - 60;
+    }
+
+    function advanceLevels(now) {
+      const elapsed = io.lastFrame ? Math.min(250, now - io.lastFrame) : 0;
+      io.lastFrame = now;
+      io.budget += (elapsed / 1000) * LEVEL_RATE;
+      // Catch up when the queue builds (slow frames, a burst after a stall).
+      const backlog = io.queue[0].length;
+      if (backlog > LEVEL_RATE * 0.5) io.budget += backlog - LEVEL_RATE * 0.25;
+      let take = Math.min(Math.floor(io.budget), backlog);
+      io.budget -= take;
+      if (!backlog) io.budget = Math.min(io.budget, 1);
+      while (take-- > 0) {
+        for (let channel = 0; channel < 4; channel++) {
+          const code = io.queue[channel].shift();
+          if (code === undefined) continue;
+          if (code >= 255) {
+            io.clipUntil[channel] = now + CLIP_HOLD_MS;
+            if (channel === 1 && io.monoActive) io.clipUntil[0] = now + CLIP_HOLD_MS;
+          }
+          const history = io.history[channel];
+          history.push(code);
+          if (history.length > HISTORY) history.shift();
+        }
+      }
+    }
+
+    function drawStrip(strip, codes, now, channel) {
+      const {context, width, height} = fitCanvas(strip.canvas);
+      const middle = height / 2;
+      context.fillStyle = "#1d2027";
+      context.fillRect(0, middle, width, 1);
+      const style = getComputedStyle(document.documentElement);
+      const barWidth = width / HISTORY;
+      const start = HISTORY - codes.length;
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        if (!code) continue;
+        const h = Math.max(1, ((levelDb(code) + 60) / 60) * (middle - 2));
+        context.fillStyle = code >= 255 ? style.getPropertyValue("--rec") : style.getPropertyValue("--wave");
+        context.fillRect((start + i) * barWidth, middle - h, Math.max(1, barWidth), h * 2);
+      }
+      const last = codes.slice(-8).reduce((a, b) => Math.max(a, b), 0);
+      strip.db.textContent = last ? (last >= 255 ? "0 dB" : levelDb(last).toFixed(0) + " dB") : "–∞";
+      strip.clip.classList.toggle("on", io.clipUntil[channel] > now);
+    }
+
+    function renderIo(now) {
+      advanceLevels(now);
+      io.sourceLabel.textContent = io.source ? "· " + io.source : "";
+      // Mono line input feeds (L+R)/2 to both sides: one strip, showing the louder input.
+      const mono = io.monoActive;
+      io.strips[1].element.hidden = mono;
+      io.strips[0].label.textContent = mono ? "Mono (L+R)" : "Left";
+      const inputLeft = mono
+        ? io.history[0].map((code, i) => Math.max(code, io.history[1][i] || 0))
+        : io.history[0];
+      drawStrip(io.strips[0], inputLeft, now, 0);
+      if (!mono) drawStrip(io.strips[1], io.history[1], now, 1);
+      drawStrip(io.strips[2], io.history[2], now, 2);
+      drawStrip(io.strips[3], io.history[3], now, 3);
+    }
+
+    function frame(now) {
+      renderIo(now);
+      renderSteps(now);
+      if (lineMono !== undefined) setValue(monoElement, lineMono ? "Mono" : "Stereo", now);
+      renderKnobs(now);
+      for (const side of view) renderSide(side, now);
+      requestAnimationFrame(frame);
+    }
+
+    view.forEach(buildSide);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

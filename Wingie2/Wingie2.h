@@ -30,6 +30,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/i2s.h"
+#include "dual_looper.h"
+#include "level_meter.h"
 
 class dsp;
 class esp32audio;
@@ -66,6 +68,9 @@ class Wingie2
         bool takeLooperFilled(int ch);
         bool takeLooperWrapped(int ch);
         bool takeLooperProfile(uint32_t out[6]);
+        void looperView(int ch, wingie_loop::LoopView& out);
+        void looperPeaks(int ch, uint8_t* out, size_t buckets);
+        size_t readLevels(uint32_t& from, uint8_t out[][wingie_loop::LevelMeter::kSize], size_t max);
         bool start();
         void stop();
     

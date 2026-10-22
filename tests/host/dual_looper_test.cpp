@@ -90,4 +90,20 @@ int main() {
     p = longLoop.position();
     assert(p <= 1 || p >= frames-1);
   }
+
+  // Waveform peaks: per-bucket mu-law magnitude, empty loops read as silence.
+  {
+    std::vector<uint8_t> buf(wingie_loop::Loop::kChunkSize * 2);
+    wingie_loop::Loop w;
+    w.attach(buf.data(), buf.size());
+    uint8_t out[4] = {9, 9, 9, 9};
+    w.peaks(out, 4);
+    assert(out[0] == 0 && out[3] == 0);
+    w.command(1);
+    for (int i = 0; i < 400 * 9; ++i) w.process(i < 200 * 9 ? 0.0f : 0.8f, 1, 1, 1, 0);
+    w.command(2);
+    assert(w.length() == 400 && w.capacity() == buf.size());
+    w.peaks(out, 4);
+    assert(out[0] == 0 && out[1] == 0 && out[2] > 100 && out[3] > 100);
+  }
 }

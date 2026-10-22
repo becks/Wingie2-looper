@@ -267,6 +267,78 @@ static void testOverflowInvalidatesMidEncode() {
   assert(response.length < 6 + wingie_serial::kMaxFrameBytes);
 }
 
+static void testLoopMonitor() {
+  LoopStatusSnapshot status = {};
+  status.ms = 1234;
+  status.frameRate = 4900;
+  status.lineInputMono = true;
+  status.threshold[0] = 0.0825f;
+  status.threshold[1] = 0.99f;
+  status.preClipGain = 0.2475f;
+  status.postClipGain = 0.825f;
+  status.lineMonoActive = true;
+  status.sourceLine = true;
+  status.levelCount = 2;
+  status.levels[0][0] = 0x00; status.levels[0][1] = 0xf0;
+  status.levels[1][0] = 0x01; status.levels[1][1] = 0x02;
+  status.levels[2][0] = 0xff; status.levels[2][1] = 0x10;
+  status.levels[3][0] = 0x0a; status.levels[3][1] = 0xab;
+  status.side[0] = {2, 86016, 4321, 86016, 1.0f, 0.5f, true, 2, 11, 17480, 250, 7, 1, -1, 48, 0x011,
+                    0.25f, 4.5f, 0.8f};
+  status.side[1].speed = 2.0f;
+  JsonResponse statusResponse;
+  encodeLoopStatus(statusResponse, 5, status);
+  checkResponse(statusResponse,
+      "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,"
+      "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
+      "{\"a\":[2,86016,4321,86016,1.000,0.500,1],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800]},"
+      "{\"a\":[0,0,0,0,2.000,0.000,0],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000]}],"
+      "\"mono_active\":1,\"src\":\"line\",\"lv\":[\"00f0\",\"0102\",\"ff10\",\"0aab\"]}");
+
+  // Worst case status fits a frame.
+  for (int ch = 0; ch < 2; ch++) {
+    status.side[ch] = {3, 4294967295u, 4294967295u, 4294967295u, 2.0f, 1.0f, true,
+                       3, 65535, 4294967295u, 4294967295u, 4294967295u, 4, -2, 127, 4095,
+                       -1.0f, 10.0f, -1.0f};
+  }
+  status.ms = 4294967295u;
+  status.threshold[0] = status.threshold[1] = -9.9999f;
+  status.preClipGain = status.postClipGain = -9.9999f;
+  status.levelCount = kLoopLevelEntries;
+  for (int ch = 0; ch < 4; ch++) memset(status.levels[ch], 0xff, kLoopLevelEntries);
+  JsonResponse worstStatus;
+  encodeLoopStatus(worstStatus, 4294967295u, status);
+  assert(worstStatus.valid);
+
+  uint8_t peaks[kLoopWaveBuckets];
+  for (size_t i = 0; i < kLoopWaveBuckets; i++) peaks[i] = static_cast<uint8_t>(i & 0x7f);
+  JsonResponse wave;
+  encodeLoopWave(wave, 4294967295u, "right", 3, 4294967295u, 4294967295u, peaks, kLoopWaveBuckets);
+  assert(wave.valid);
+  assert(strstr(wave.data, "\"peaks\":\"000102") != nullptr);
+  assert(strstr(wave.data, "7f00") != nullptr);
+  assert(wave.data[wave.length - 1] == '}');
+
+  uint32_t times[kLoopNotesPage];
+  uint8_t keys[kLoopNotesPage];
+  for (size_t i = 0; i < kLoopNotesPage; i++) {
+    times[i] = 0xffffff;
+    keys[i] = 11;
+  }
+  JsonResponse notes;
+  encodeLoopNotes(notes, 4294967295u, "right", 3, 65535, 4294967295u, 4294967295u, 65535, times, keys,
+                  kLoopNotesPage);
+  assert(notes.valid);
+
+  uint32_t one[1] = {100};
+  uint8_t key[1] = {4};
+  JsonResponse small;
+  encodeLoopNotes(small, 6, "left", 2, 1, 1000, 3, 0, one, key, 1);
+  checkResponse(small,
+      "{\"v\":1,\"id\":6,\"ok\":true,\"op\":\"loop_notes\",\"side\":\"left\",\"state\":2,\"count\":1,"
+      "\"length_ms\":1000,\"revision\":3,\"offset\":0,\"events\":[[100,4]]}");
+}
+
 int main() {
   testHello();
   testError();
@@ -280,5 +352,6 @@ int main() {
   testControlCounts();
   testResponseTooLargeFallback();
   testOverflowInvalidatesMidEncode();
+  testLoopMonitor();
   return 0;
 }

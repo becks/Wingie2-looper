@@ -29,7 +29,10 @@ enum Operation {
   kOperationSetCave,
   kOperationGetSettings,
   kOperationSetParam,
-  kOperationGetControls
+  kOperationGetControls,
+  kOperationLoopStatus,
+  kOperationLoopWave,
+  kOperationLoopNotes
 };
 
 enum ParseErrorCode {
@@ -62,6 +65,7 @@ struct Request {
   char name[20];
   float value;
   bool reset;
+  uint16_t offset;
 };
 
 inline void setError(ParseError &error, ParseErrorCode code, int index = -1) {
@@ -192,6 +196,9 @@ inline Operation operationFromString(const char *value) {
   if (strcmp(value, "get_settings") == 0) return kOperationGetSettings;
   if (strcmp(value, "set_param") == 0) return kOperationSetParam;
   if (strcmp(value, "get_controls") == 0) return kOperationGetControls;
+  if (strcmp(value, "loop_status") == 0) return kOperationLoopStatus;
+  if (strcmp(value, "loop_wave") == 0) return kOperationLoopWave;
+  if (strcmp(value, "loop_notes") == 0) return kOperationLoopNotes;
   return kOperationInvalid;
 }
 
@@ -254,6 +261,23 @@ inline bool parseRequestLine(const char *line, size_t length, Request &request, 
       setError(error, kParseInvalidField);
       return false;
     }
+  }
+
+  // Loop Monitor reads: one side per request; loop_notes pages through events.
+  if (request.operation == kOperationLoopWave || request.operation == kOperationLoopNotes) {
+    const char *side = findField(object, "side");
+    if (!side || !parseString(side, request.side, sizeof(request.side)) ||
+        (strcmp(request.side, "left") != 0 && strcmp(request.side, "right") != 0)) {
+      setError(error, kParseInvalidField);
+      return false;
+    }
+    const char *offset = findField(object, "offset");
+    uint32_t parsedOffset = 0;
+    if (offset && (!parseUnsigned(offset, parsedOffset, nullptr) || parsedOffset > UINT16_MAX)) {
+      setError(error, kParseInvalidField);
+      return false;
+    }
+    request.offset = static_cast<uint16_t>(parsedOffset);
   }
 
   if (request.operation == kOperationGetCave || request.operation == kOperationSetCave) {

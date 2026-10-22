@@ -17,12 +17,23 @@ class NoteLoop {
   uint16_t count() const { return count_; }
   uint32_t lengthMs() const { return length_; }
   bool recording() const { return state_ == kRecording; }
+  // Bumped whenever the recorded events change, so a monitor knows when to re-read them.
+  uint32_t revision() const { return revision_; }
+  uint32_t eventTime(uint16_t i) const { return i < count_ ? events_[i] >> 8 : 0; }
+  uint8_t eventKey(uint16_t i) const { return i < count_ ? (uint8_t)(events_[i] & 0xff) : 0; }
+  // Milliseconds into the current recording or playback cycle (0 otherwise).
+  uint32_t positionMs(uint32_t now) const {
+    if (state_ == kRecording) return now - start_;
+    if (state_ != kPlaying || !length_) return 0;
+    return (now - cycleStart_) % length_;
+  }
 
   void startRecording(uint32_t now) {
     state_ = kRecording;
     count_ = 0;
     length_ = 0;
     start_ = now;
+    ++revision_;
   }
 
   // Returns true when the event buffer filled up (or the maximum length was
@@ -35,6 +46,7 @@ class NoteLoop {
       return true;
     }
     events_[count_++] = (elapsed << 8) | key;
+    ++revision_;
     if (count_ == kCapacity) {
       finishRecording(now);
       return true;
@@ -56,6 +68,7 @@ class NoteLoop {
     if (elapsed <= last) elapsed = last + 1;
     if (elapsed > kMaxLengthMs) elapsed = kMaxLengthMs;
     length_ = elapsed;
+    ++revision_;
     state_ = kStopped;
     play(now);
   }
@@ -76,6 +89,7 @@ class NoteLoop {
     count_ = 0;
     length_ = 0;
     cursor_ = 0;
+    ++revision_;
   }
 
   // Call repeatedly until it returns false: yields each key that is due at `now`.
@@ -100,7 +114,7 @@ class NoteLoop {
 
  private:
   uint32_t events_[kCapacity] = {};
-  uint32_t start_ = 0, length_ = 0, cycleStart_ = 0;
+  uint32_t start_ = 0, length_ = 0, cycleStart_ = 0, revision_ = 0;
   uint16_t count_ = 0, cursor_ = 0;
   State state_ = kEmpty;
 };

@@ -87,6 +87,51 @@ struct ControlCountsSnapshot {
   uint16_t pot[3];
 };
 
+// Loop Monitor: waveform buckets per loop_wave frame (two hex digits each) and
+// note events per loop_notes page, both sized to stay under kMaxFrameBytes.
+static const size_t kLoopWaveBuckets = 384;
+static const size_t kLoopNotesPage = 48;
+// Level entries (input L/R, output L/R) per loop_status frame.
+static const size_t kLoopLevelEntries = 40;
+
+// One side of a loop_status frame: audio loop, note loop and panel state.
+struct LoopSideSnapshot {
+  int audioState;
+  uint32_t length;
+  uint32_t position;
+  uint32_t capacity;
+  float speed;
+  float level;
+  bool reverse;
+  int notesState;
+  uint16_t noteCount;
+  uint32_t notesLengthMs;
+  uint32_t notesPositionMs;
+  uint32_t notesRevision;
+  int mode;
+  int octave;
+  int note;
+  uint16_t keys;  // bit i set while panel key i is held
+  float mix;
+  float decay;
+  float volume;
+};
+
+struct LoopStatusSnapshot {
+  uint32_t ms;
+  uint32_t frameRate;
+  bool lineInputMono;  // toggled by holding both C keys at boot
+  float threshold[2];  // sequencer threshold per side
+  float preClipGain;
+  float postClipGain;
+  bool lineMonoActive;  // mono applies only while the source is line
+  bool sourceLine;
+  // Encoded peaks (see LevelMeter::encode) since the previous frame.
+  uint8_t levels[4][kLoopLevelEntries];
+  size_t levelCount;
+  LoopSideSnapshot side[2];
+};
+
 inline void appendRatioArray(JsonResponse &response, const float *ratios) {
   response.append("[");
   for (uint8_t index = 0; index < wingie_config::kRatioCount; index++) {
@@ -269,6 +314,87 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
                   static_cast<unsigned>(snapshot.sourceSwitch));
   appendControlCounterArray(response, snapshot.pot, 3);
   response.append("]}}");
+}
+
+// Compact on purpose: the monitor polls it several times a second over 115200 baud.
+// a: [state, length, position, capacity, speed, level, reverse] (frames)
+// n: [state, events, length_ms, position_ms, revision]
+// x: [mix, decay, volume] as the DSP currently has them
+// lv: input L, input R, output L, output R peak entries since the last frame, hex
+inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
+  response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
+                  "\"ms\":%lu,\"fps\":%lu,\"mono\":%d,"
+                  "\"t\":[%.4f,%.4f],\"g\":[%.4f,%.4f],\"sides\":[",
+                  static_cast<unsigned long>(id), static_cast<unsigned long>(snapshot.ms),
+                  static_cast<unsigned long>(snapshot.frameRate), snapshot.lineInputMono ? 1 : 0,
+                  snapshot.threshold[0], snapshot.threshold[1], snapshot.preClipGain,
+                  snapshot.postClipGain);
+  for (int ch = 0; ch < 2; ch++) {
+    const LoopSideSnapshot &side = snapshot.side[ch];
+    response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d],\"n\":[%d,%u,%lu,%lu,%lu],"
+                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f]}",
+                    ch ? "," : "", side.audioState, static_cast<unsigned long>(side.length),
+                    static_cast<unsigned long>(side.position), static_cast<unsigned long>(side.capacity),
+                    side.speed, side.level, side.reverse ? 1 : 0, side.notesState,
+                    static_cast<unsigned>(side.noteCount), static_cast<unsigned long>(side.notesLengthMs),
+                    static_cast<unsigned long>(side.notesPositionMs),
+                    static_cast<unsigned long>(side.notesRevision), side.mode, side.octave, side.note,
+                    static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume);
+  }
+  response.append("],\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
+                  snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");
+  static const char kHex[] = "0123456789abcdef";
+  for (int ch = 0; ch < 4; ch++) {
+    response.append(ch ? ",\"" : "\"");
+    for (size_t i = 0; i < snapshot.levelCount && i < kLoopLevelEntries && response.valid; i++) {
+      if (response.length + 2 >= kMaxFrameBytes) {
+        response.valid = false;
+        return;
+      }
+      response.data[response.length++] = kHex[snapshot.levels[ch][i] >> 4];
+      response.data[response.length++] = kHex[snapshot.levels[ch][i] & 0x0f];
+      response.data[response.length] = '\0';
+    }
+    response.append("\"");
+  }
+  response.append("]}");
+}
+
+// peaks: one byte (0-127) per bucket, hex encoded.
+inline void encodeLoopWave(JsonResponse &response, uint32_t id, const char *side, int state,
+                           uint32_t length, uint32_t capacity, const uint8_t *peaks, size_t count) {
+  response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_wave\",\"side\":\"%s\","
+                  "\"state\":%d,\"length\":%lu,\"capacity\":%lu,\"peaks\":\"",
+                  static_cast<unsigned long>(id), side, state, static_cast<unsigned long>(length),
+                  static_cast<unsigned long>(capacity));
+  static const char kHex[] = "0123456789abcdef";
+  for (size_t i = 0; i < count && response.valid; i++) {
+    if (response.length + 2 >= kMaxFrameBytes) {
+      response.valid = false;
+      return;
+    }
+    response.data[response.length++] = kHex[peaks[i] >> 4];
+    response.data[response.length++] = kHex[peaks[i] & 0x0f];
+    response.data[response.length] = '\0';
+  }
+  response.append("\"}");
+}
+
+// events: [time_ms, key] pairs starting at `offset`.
+inline void encodeLoopNotes(JsonResponse &response, uint32_t id, const char *side, int state,
+                            uint16_t total, uint32_t lengthMs, uint32_t revision, uint16_t offset,
+                            const uint32_t *times, const uint8_t *keys, size_t count) {
+  response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_notes\",\"side\":\"%s\","
+                  "\"state\":%d,\"count\":%u,\"length_ms\":%lu,\"revision\":%lu,"
+                  "\"offset\":%u,\"events\":[",
+                  static_cast<unsigned long>(id), side, state, static_cast<unsigned>(total),
+                  static_cast<unsigned long>(lengthMs), static_cast<unsigned long>(revision),
+                  static_cast<unsigned>(offset));
+  for (size_t i = 0; i < count; i++) {
+    response.append("%s[%lu,%u]", i ? "," : "", static_cast<unsigned long>(times[i]),
+                    static_cast<unsigned>(keys[i]));
+  }
+  response.append("]}");
 }
 
 inline void encodeQueued(JsonResponse &response, uint32_t id, const char *operation,
