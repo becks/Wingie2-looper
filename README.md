@@ -22,7 +22,7 @@ Hold both Mode buttons, then press a key on the side whose looper you want to co
 | D# | Audio: bypass (keeps the loop) |
 | Hold E (1 s) | Audio: clear the loop |
 | F / G | Audio: speed one step down / up (4th, 5th, octave); hold ½ s: an octave |
-| F# | Audio: speed 1× |
+| F# | Audio: speed 1×; hold ½ s: speed mode varispeed → pitch → stretch |
 | G# | Audio: loop level − |
 | **A** | **Notes: record → close and play → stop → play** |
 | **Hold A (1 s)** | **Notes: clear the sequence** |
@@ -36,8 +36,15 @@ three seconds without pressing a key still saves preferences.
 
 Speed steps are pure ratios: 1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2 (two octaves down to an octave
 up, through fourths and fifths). A short F or G press moves one step from the current speed;
-holding it for half a second halves or doubles the speed instead. Speed also changes pitch and
-loop duration, like tape, and returns to 1× at power-on.
+holding it for half a second halves or doubles the speed instead. Speed returns to 1× at power-on.
+
+Holding F# for half a second cycles that side's speed mode (seven LED blinks):
+**varispeed** (white) changes pitch and loop duration together, like tape; **pitch** (purple)
+shifts the pitch by the speed step while the loop keeps its length and stays in time;
+**stretch** (yellow) changes the tempo by the speed step while the pitch stays put. Pitch and
+stretch use short grains (~65 ms), so they sound slightly granular, most of all two octaves
+down. Overdub records at the play position in every mode. The mode returns to varispeed at
+power-on.
 
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
@@ -50,8 +57,8 @@ each audio loop restart flashes the side purple (white in Cave mode).
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
 level and direction, the panel keys and controls, and input/output levels. Its only controls are each
 side's Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
-overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved) and speed step buttons
-(the same steps as F/G, MIDI CC 86). Open it from disk in
+overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
+(varispeed / pitch / stretch, MIDI CC 87) and speed step buttons (the same steps as F/G, MIDI CC 86). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
 

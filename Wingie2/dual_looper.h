@@ -3,6 +3,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <math.h>
+// The engine runs in the audio task next to the Faust resonators; the sketch's
+// default -Os leaves its per-sample loop noticeably slower than -O2.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC push_options
+#pragma GCC optimize("O2")
+#endif
 namespace wingie_loop {
 // Display snapshot of one audio loop for the Loop Monitor.
 struct LoopView {
@@ -10,6 +16,7 @@ struct LoopView {
   uint32_t length = 0, position = 0, capacity = 0;
   float speed = 1, level = 1, retention = 0.8f;
   bool reverse = false;
+  int speedMode = 0;  // wingie_loop::SpeedMode
 };
 class Loop {
 public:
@@ -33,6 +40,7 @@ private:
   int state_ = 0;
   bool filled_ = false, wrapped_ = false;
   uint8_t& at(size_t i) { return chunks_[i >> kChunkBits][i & (kChunkSize - 1)]; }
+  uint8_t get(size_t i) const { return chunks_[i >> kChunkBits][i & (kChunkSize - 1)]; }
   static uint8_t encode(float sample) {
     // This runs once for each 4.9 kHz looper frame while overdubbing.  Avoid
     // the floating-point rounding helper and the eight-step exponent scan so
@@ -74,11 +82,62 @@ private:
   static constexpr size_t kNoCache = ~size_t(0);
   size_t cachedIndex_ = kNoCache;
   float cachedA_ = 0, cachedB_ = 0;
+  // Pitch shift without changing loop length: two read heads ("grains") at an
+  // offset ahead of the play position that drifts at (pitch - 1); they sit half a
+  // grain apart with triangular gains summing to 1, so each wraps while silent.
+  static constexpr float kGrainFrames = 320;  // ~65 ms at 4.9 kHz
+  // Each grain is a read head moving at the pitch rate; like the play position
+  // it decodes its two neighbouring frames only when it moves to a new frame.
+  // A head is re-placed relative to the play position when its offset wraps.
+  // Positions are fixed point (kFxBits fraction bits): the audio task cannot
+  // afford float position loops for two extra heads per side.
+  static constexpr int kFxBits = 12;
+  static constexpr float kFxOne = 1 << kFxBits, kFxInv = 1.0f / (1 << kFxBits);
+  struct Head {
+    int32_t position = 0;  // frames << kFxBits
+    size_t cached = kNoCache;
+    float a = 0, b = 0;
+  };
+  Head heads_[2];
+  int32_t grain_ = 0;  // grain phase, frames << kFxBits
+  bool headsPlaced_ = false;
+  // Grains run at half the audio rate (the loop holds nothing above ~2.4 kHz):
+  // computed on alternate samples and linearly interpolated in between.
+  bool grainSkip_ = false;
+  float grainLast_ = 0;
+  __attribute__((always_inline)) static void place(Head& head, size_t position, float fraction,
+                                                   int32_t offset, int32_t lengthFx) {
+    int32_t p = ((int32_t)position << kFxBits) + (int32_t)(fraction * kFxOne) + offset;
+    if (p >= lengthFx) p -= lengthFx;
+    head.position = p;
+  }
+  __attribute__((always_inline)) float read(Head& head, size_t length, float fadeScale, float fadeLength) const {
+    size_t i = (size_t)(head.position >> kFxBits);
+    if (i != head.cached) {
+      head.a = decode(get(i));
+      head.b = decode(get(i + 1 == length ? 0 : i + 1));
+      head.cached = i;
+    }
+    float fraction = (head.position & ((1 << kFxBits) - 1)) * kFxInv;
+    float sample = head.a + (head.b - head.a) * fraction;
+    if (i < 9 || i + 9 >= length) {
+      size_t back = length - i;
+      float edge = i < back ? i + fraction : back - fraction;
+      if (edge < fadeLength) sample *= edge * fadeScale;
+    }
+    return sample;
+  }
+  __attribute__((always_inline)) static void advance(Head& head, int32_t delta, int32_t lengthFx) {
+    int32_t p = head.position + delta;
+    if (p >= lengthFx) p -= lengthFx;
+    else if (p < 0) p += lengthFx;
+    head.position = p;
+  }
   // Block processing keeps the hot playback state in locals: the audio task has
   // only a few percent of headroom above the Faust resonators.
-  template <bool kReverse>
+  template <bool kReverse, bool kGrains>
   void processBlock(const float* input, float* output, int n, float step, float level,
-                    float retention, const float* feedback, float cross) {
+                    float retention, const float* feedback, float cross, float pitch) {
     if (!capacity_ || state_ == 0) {
       for (int k = 0; k < n; ++k) output[k] = input[k];
       return;
@@ -105,19 +164,53 @@ private:
     size_t position = position_, cached = cachedIndex_;
     float fraction = fraction_, smooth = smooth_, a = cachedA_, b = cachedB_;
     if (overdub) retention_ = retention;
+    // Grains need room for two of them inside the loop.
+    const float width = length / 2 < kGrainFrames ? length / 2 : kGrainFrames;
+    const bool grains = kGrains && width >= 4;
+    const int32_t lengthFx = (int32_t)length << kFxBits;
+    const int32_t widthFx = (int32_t)(width * kFxOne), halfFx = widthFx / 2;
+    const float gainScale = 2.0f / widthFx;
+    // Per computed grain sample, i.e. every second audio sample.
+    const int32_t grainRate = (int32_t)lroundf((kReverse ? 1.0f - pitch : pitch - 1.0f) * 2 * step * kFxOne);
+    const int32_t headStep = (int32_t)lroundf((kReverse ? -pitch : pitch) * 2 * step * kFxOne);
+    bool grainSkip = grainSkip_;
+    float grainLast = grainLast_;
+    int32_t grain = grain_ >= 0 && grain_ < widthFx ? grain_ : 0;
+    Head head0 = heads_[0], head1 = heads_[1];
+    if (grains && !headsPlaced_) {
+      int32_t second = grain + halfFx;
+      if (second >= widthFx) second -= widthFx;
+      place(head0, position, fraction, grain, lengthFx);
+      place(head1, position, fraction, second, lengthFx);
+      head0.cached = head1.cached = kNoCache;
+    }
+    headsPlaced_ = grains;
     for (; k < n; ++k) {
-      if (position != cached) {
+      // With grains only the heads read; the play position just keeps time.
+      if (!grains && position != cached) {
         size_t next = position + 1 == length ? 0 : position + 1;
         a = decode(at(position));
         b = decode(at(next));
         cached = position;
       }
-      float sample = a + (b - a) * fraction;
-      // Short edge fade suppresses discontinuities without changing loop duration.
-      size_t back = length - position;
-      if (position < 9 || back <= 9) {
-        float edge = position < back ? position + fraction : back - fraction;
-        if (edge < fadeLength) sample *= edge * fadeScale;
+      float sample;
+      const bool grainTick = grains && !grainSkip;
+      if (grainTick) {
+        float gain = 1.0f - fabsf(grain * gainScale - 1.0f);
+        float latest = gain * read(head0, length, fadeScale, fadeLength) +
+                       (1.0f - gain) * read(head1, length, fadeScale, fadeLength);
+        sample = 0.5f * (grainLast + latest);
+        grainLast = latest;
+      } else if (grains) {
+        sample = grainLast;
+      } else {
+        sample = a + (b - a) * fraction;
+        // Short edge fade suppresses discontinuities without changing loop duration.
+        size_t back = length - position;
+        if (position < 9 || back <= 9) {
+          float edge = position < back ? position + fraction : back - fraction;
+          if (edge < fadeLength) sample *= edge * fadeScale;
+        }
       }
       if (overdub) {
         if (!overdubCount_) overdubIndex_ = position;
@@ -146,6 +239,25 @@ private:
           if (++position >= length) { position = 0; wrapped_ = true; }
         }
       }
+      if (grains) grainSkip = !grainSkip;
+      if (grainTick) {
+        // Heads move at the pitch rate; the one whose offset wraps (silent at
+        // that moment) jumps back next to the new play position.
+        advance(head0, headStep, lengthFx);
+        advance(head1, headStep, lengthFx);
+        int32_t next = grain + grainRate;
+        bool crossedHalf = (grain < halfFx) != (next < halfFx);
+        if (next >= widthFx || next < 0) {
+          next += next < 0 ? widthFx : -widthFx;
+          place(head0, position, fraction, next, lengthFx);
+        }
+        if (crossedHalf) {
+          int32_t second = next + halfFx;
+          if (second >= widthFx) second -= widthFx;
+          place(head1, position, fraction, second, lengthFx);
+        }
+        grain = next;
+      }
       smooth += 0.02f * (level - smooth);
       // During overdub, let the player hear the new material immediately as
       // well as the existing loop. -6 dB keeps their combined drive controlled.
@@ -154,6 +266,11 @@ private:
     position_ = position;
     fraction_ = fraction;
     smooth_ = smooth;
+    grain_ = grain;
+    grainSkip_ = grainSkip;
+    grainLast_ = grainLast;
+    heads_[0] = head0;
+    heads_[1] = head1;
     cachedIndex_ = cached;
     cachedA_ = a;
     cachedB_ = b;
@@ -200,6 +317,7 @@ public:
   void command(int value) {
     if (!capacity_) return;
     cachedIndex_ = kNoCache;
+    headsPlaced_ = false;
     if (value == 4) {
       length_ = 0; position_ = 0; fraction_ = 0; state_ = 0;
       recordSum_ = overdubInputSum_ = overdubFeedbackSum_ = 0;
@@ -228,13 +346,22 @@ public:
   }
   // Processes n samples; `step` is speed / rateDivision(), computed once per
   // block. `feedback` (scaled by `cross`) may be null when cross-feedback is off.
+  // `pitch` other than 1 shifts the pitch by that ratio with grains, independently
+  // of `step` (the stretch mode plays at step 1/rateDivision()).
+  // The grain path is a separate instantiation so the plain one stays lean.
   void process(const float* input, float* output, int n, float step, float level,
-               float retention, const float* feedback, float cross) {
-    processBlock<false>(input, output, n, step, level, retention, feedback, cross);
+               float retention, const float* feedback, float cross, float pitch = 1) {
+    if (pitch < 0.9999f || pitch > 1.0001f)
+      processBlock<false, true>(input, output, n, step, level, retention, feedback, cross, pitch);
+    else
+      processBlock<false, false>(input, output, n, step, level, retention, feedback, cross, pitch);
   }
   void processReverse(const float* input, float* output, int n, float step, float level,
-                      float retention, const float* feedback, float cross) {
-    processBlock<true>(input, output, n, step, level, retention, feedback, cross);
+                      float retention, const float* feedback, float cross, float pitch = 1) {
+    if (pitch < 0.9999f || pitch > 1.0001f)
+      processBlock<true, true>(input, output, n, step, level, retention, feedback, cross, pitch);
+    else
+      processBlock<true, false>(input, output, n, step, level, retention, feedback, cross, pitch);
   }
   // Single-sample convenience used by the host tests.
   float process(float input, float speed, float level, float retention, float feedback) {
@@ -249,3 +376,6 @@ public:
   }
 };
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif

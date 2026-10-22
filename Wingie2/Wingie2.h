@@ -67,6 +67,7 @@ class Wingie2
         void setLooperControl(int ch, int cc, int value);
         void setLooperRetention(int ch, float value);
         void setLooperSpeed(int ch, float value);
+        void setLooperSpeedMode(int ch, int mode);
         bool takeLooperFilled(int ch);
         bool takeLooperWrapped(int ch);
         bool takeLooperProfile(uint32_t out[6]);

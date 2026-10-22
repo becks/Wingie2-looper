@@ -92,6 +92,95 @@ int main() {
     assert(p <= 1 || p >= frames-1);
   }
 
+  // Pitch shift (stretch mode): grains change the pitch by the ratio while the
+  // play position, and so the loop length, still advance at 1x.
+  {
+    const size_t frames = 4900;  // 1 s loop of a ~408 Hz sine (12 frames per cycle)
+    std::vector<uint8_t> storage(frames);
+    wingie_loop::Loop shifted;
+    shifted.attach(storage.data(), storage.size());
+    shifted.command(1);
+    for (size_t i = 0; i < frames * 9; ++i)
+      shifted.process(0.5f * sinf(6.2831853f * (i / 9.0f) / 12.0f), 1, 1, 1, 0);
+    shifted.command(2);
+    assert(shifted.length() == frames);
+    const float step = 1.0f / wingie_loop::Loop::rateDivision();
+    // -2 octaves is left out: two-grain shifting smears it far more.
+    for (float pitch : {0.5f, 2.0f / 3.0f, 0.75f, 4.0f / 3.0f, 1.5f, 2.0f}) {
+      for (bool reverse : {false, true}) {
+        const int n = 64, blocks = (int)(frames * 9 / n);  // one loop cycle
+        size_t start = shifted.position();
+        float in[64] = {}, out[64];
+        std::vector<float> played;
+        float peak = 0;
+        for (int blk = 0; blk < blocks; ++blk) {
+          if (reverse) shifted.processReverse(in, out, n, step, 1, 1, nullptr, 0, pitch);
+          else shifted.process(in, out, n, step, 1, 1, nullptr, 0, pitch);
+          for (int k = 0; k < n; ++k) {
+            assert(std::isfinite(out[k]) && std::abs(out[k]) <= 1);
+            played.push_back(out[k]);
+            peak = std::max(peak, std::abs(out[k]));
+          }
+        }
+        // Back near the start after one cycle at 1x, whatever the pitch.
+        size_t p = shifted.position(), d = p > start ? p - start : start - p;
+        assert(d <= 2 || d >= frames - 2);
+        // The recorded sine has a 108-sample period at 1x. Grain seams add
+        // sidebands, so the strongest frequency lands within 8% of the ratio;
+        // the level stays close to the recorded one.
+        double best = 0, bestRatio = 0;
+        for (double ratio = 0.2; ratio <= 2.5; ratio += 0.005) {
+          double w = 2 * M_PI * ratio / 108.0, c = 2 * cos(w), s1 = 0, s2 = 0;
+          for (float v : played) { double s0 = v + c * s1 - s2; s2 = s1; s1 = s0; }
+          double power = s1 * s1 + s2 * s2 - c * s1 * s2;
+          if (power > best) { best = power; bestRatio = ratio; }
+        }
+        assert(std::abs(bestRatio - pitch) < 0.08 * pitch);
+        assert(peak > 0.4f && peak < 0.6f);
+      }
+    }
+    // Stretch: the play position moves at the tempo while grains keep the
+    // recorded pitch (grain ratio 1 / tempo).
+    for (float tempo : {0.5f, 2.0f / 3.0f, 1.5f, 2.0f}) {
+      const int n = 64, blocks = (int)(frames * 9 / n);
+      size_t start = shifted.position();
+      float in[64] = {}, out[64];
+      std::vector<float> played;
+      for (int blk = 0; blk < blocks; ++blk) {
+        shifted.process(in, out, n, tempo * step, 1, 1, nullptr, 0, 1.0f / tempo);
+        played.insert(played.end(), out, out + n);
+      }
+      // One loop time at 1x covers `tempo` loops.
+      double covered = std::fmod(tempo, 1.0) * frames;
+      size_t p = shifted.position();
+      double moved = p >= start ? p - start : p + frames - start;
+      assert(std::abs(moved - covered) <= 2 || std::abs(moved - covered) >= frames - 2);
+      double best = 0, bestRatio = 0;
+      for (double ratio = 0.2; ratio <= 2.5; ratio += 0.005) {
+        double w = 2 * M_PI * ratio / 108.0, c = 2 * cos(w), s1 = 0, s2 = 0;
+        for (float v : played) { double s0 = v + c * s1 - s2; s2 = s1; s1 = s0; }
+        double power = s1 * s1 + s2 * s2 - c * s1 * s2;
+        if (power > best) { best = power; bestRatio = ratio; }
+      }
+      assert(std::abs(bestRatio - 1.0) < 0.08);
+    }
+
+    // Pitch 1 is the plain path.
+    std::vector<uint8_t> plainStorage(frames), unityStorage(frames);
+    wingie_loop::Loop plain, unity;
+    plain.attach(plainStorage.data(), frames);
+    unity.attach(unityStorage.data(), frames);
+    plain.command(1); unity.command(1);
+    for (size_t i = 0; i < 900; ++i) { float v = 0.3f * sinf(i * 0.05f); plain.process(v, 1, 1, 1, 0); unity.process(v, 1, 1, 1, 0); }
+    plain.command(2); unity.command(2);
+    float x[64] = {}, y[64], z[64];
+    for (int blk = 0; blk < 4; ++blk) {
+      plain.process(x, y, 64, step, 1, 1, nullptr, 0);
+      unity.process(x, z, 64, step, 1, 1, nullptr, 0, 1.0f);
+      for (int k = 0; k < 64; ++k) assert(y[k] == z[k]);
+    }
+  }
+
   // Waveform peaks: per-bucket mu-law magnitude, empty loops read as silence.
   {
     std::vector<uint8_t> buf(wingie_loop::Loop::kChunkSize * 2);

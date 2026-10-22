@@ -255,6 +255,15 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Looper speed mode (as MIDI CC 87): 0 varispeed, 1 pitch only, 2 tempo only. Runtime only.
+    if (strcmp(request.name, "speed_mode") == 0) {
+      int mode;
+      if (!quantizeIntegerParameter(request.value, 0, wingie_loop::kSpeedModeCount - 1, mode)) return false;
+      dsp.setLooperSpeedMode(ch, mode);
+      canonical = mode;
+      return true;
+    }
+
     if (strcmp(request.name, "pan") == 0) {
       if (!quantizeParameter(request.value, wingie_config::kPanMin, wingie_config::kPanMax,
                              wingie_config::kPanStep, canonical))
@@ -495,6 +504,7 @@ void sendLoopStatus(uint32_t id) {
     side.level = view.level;
     side.reverse = view.reverse;
     side.retention = view.retention;
+    side.speedMode = view.speedMode;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();

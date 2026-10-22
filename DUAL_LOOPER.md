@@ -18,7 +18,10 @@ for three seconds without pressing a note continues to save preferences normally
 While holding both Mode buttons, F and G move that side's loop speed one step down or
 up through pure-ratio fourths, fifths and octaves (1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2);
 holding F or G for half a second jumps an octave from the current speed instead (within
-0.25–2×), and F# returns to 1×. G# lowers and A#/B♭ raises that side's
+0.25–2×), and F# returns to 1×. Holding F# for half a second cycles the side's speed
+mode: varispeed (tape: pitch and duration together), pitch (the speed shifts pitch, the
+loop keeps its length) and stretch (the speed changes tempo, the pitch is kept); the LED
+blinks seven times, white, purple or yellow. G# lowers and A#/B♭ raises that side's
 loop level in approximately 6% steps. B toggles reverse playback.
 
 ### Note loopers
@@ -47,6 +50,7 @@ run independently and are not synchronized.
 | 84 | Cross-feedback during overdub | 0–127 = 0–25% of the opposite output |
 | 85 | Reverse | 0–63 forward; 64–127 reverse |
 | 86 | Speed step | 0–127 in eight bands of 16: 1/4, 1/2, 2/3, 3/4, 1 (64), 4/3, 3/2, 2 |
+| 87 | Speed mode | 0–42 varispeed; 43–85 pitch (length kept); 86–127 stretch (pitch kept) |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -76,23 +80,28 @@ available on the tested unit. Recording automatically switches to playback when 
 buffer is full; that side's LED then blinks red/white for about 0.75 s. During playback
 and overdub, the LED flashes purple (white in Cave mode) for about 120 ms each time the
 loop restarts. If allocation fails, the signal remains in bypass. Cross-feedback uses the previous 64-sample output block and includes the
-configured dry/wet mix. Loop boundaries use a short fade. Speeds other than 1× also
-change pitch. During overdub, the live input is mixed at -6 dB with the existing loop
+configured dry/wet mix. Loop boundaries use a short fade. In varispeed, speeds other than
+1× also change pitch. Pitch and stretch modes read the loop with two grain heads (~65 ms,
+half a grain apart, triangular crossfade): in pitch mode the play position moves at 1× and
+the heads at the speed; in stretch mode the play position moves at the speed and the heads
+at 1×. The grains are computed every second audio sample and interpolated, since the
+loop holds nothing above ~2.4 kHz. During overdub, the live input is mixed at -6 dB with the existing loop
 so new material is heard immediately; it is averaged and written once per low-rate
 buffer position.
 
 Limitations: continuous speed and level (beyond the panel and Loop Monitor steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
-synchronization, audio persistence, time stretching, or automatic pitch modulation.
+synchronization, audio persistence, or automatic pitch modulation.
 
 ## Loop Monitor
 
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
 keys and controls, and input/output levels. Its only controls are each side's Pan and
-SOS sliders and speed step buttons (`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
+SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
+(`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
-later (advertised as the `speed_steps` capability in `hello`); the rest works from
+later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`); the rest works from
 v4.30-duallooper.5.
 
 ## CPU headroom
@@ -100,7 +109,10 @@ v4.30-duallooper.5.
 The Faust resonators use about 80% of the audio task's block time, and audio glitches
 appear near 92%. The loop engine therefore processes whole 64-sample blocks with the
 hot state in locals, decodes stored frames only when the read position moves, and
-computes the speed step once per block. Building with `-DLOOPER_PROFILE=1` (for example
+computes the speed step once per block. The engine header is compiled at `-O2` (the sketch
+default is `-Os`), and the plain and grain paths are separate template instances. With
+both sides overdubbing, measured averages are about 293k cycles per block in varispeed
+and 308–310k in pitch or stretch at 2× (budget 348k, glitches near 320k). Building with `-DLOOPER_PROFILE=1` (for example
 `--build-property compiler.cpp.extra_flags=-DLOOPER_PROFILE=1`) prints a `LOOPER_PROF`
 line every two seconds with average and peak cycles per block, total and looper-only,
 against the budget.
@@ -119,7 +131,7 @@ through `LooperDSP`. The only looper-era change to `Wingie2.dsp` is the post-res
 pan (`pan0`/`pan1`). If `Wingie2.cpp` is regenerated with Faust, reapply the
 `looper_dsp.h` include, wrap `fDSP` after it is created, allocate the looper before
 `fAudio->start`, and restore the hand-written `Wingie2` methods declared in `Wingie2.h`:
-`setLooperControl`, `setLooperRetention`, `setLooperSpeed`, `takeLooperFilled`, `takeLooperWrapped`,
+`setLooperControl`, `setLooperRetention`, `setLooperSpeed`, `setLooperSpeedMode`, `takeLooperFilled`, `takeLooperWrapped`,
 `takeLooperProfile`, `looperView`, `looperPeaks` and `readLevels`.
 
 A successful build is required before flashing. On the Wingie2, verify startup,

@@ -14387,6 +14387,10 @@ void Wingie2::setLooperSpeed(int ch, float value) {
     static_cast<LooperDSP*>(fDSP)->setSpeed(ch, value);
 }
 
+void Wingie2::setLooperSpeedMode(int ch, int mode) {
+    static_cast<LooperDSP*>(fDSP)->setSpeedMode(ch, mode);
+}
+
 bool Wingie2::takeLooperFilled(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeFilled(ch);
 }
