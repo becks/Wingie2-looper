@@ -348,7 +348,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     control,        /* Task function. */
     "control",      /* name of task. */
-    10000,          /* Stack size of task */
+    7168,           /* Stack size of task (peak use measured ~2.2 KB) */
     NULL,           /* parameter of the task */
     1,              /* priority of the task */
     &controlCore,   /* Task handle to keep track of created task */

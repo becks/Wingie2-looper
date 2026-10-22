@@ -37,10 +37,15 @@ class LooperDSP : public decorator_dsp {
   std::atomic<uint32_t> profSeq_ {0};
   uint32_t profSeen_ = 0;  // reader side only
 #endif
-  // Heap left after allocation for the audio driver, its task, the control task
-  // (created after dsp.start()), Preferences and the serial protocol. No PSRAM assumption.
-  static constexpr size_t kHeapReserve = 32768;
-  // Contiguous room for task stacks created after allocation (control uses 10000 B).
+  // The audio task (4096 B stack) and the control task (7168 B, created after
+  // dsp.start()) need contiguous stacks after allocation: one block of this size is
+  // held while the chunks are taken, then freed for them. Margin covers the TCBs.
+  static constexpr size_t kTaskHole = 4096 + 7168 + 1024;
+  // Heap left besides that hole for Preferences, the serial protocol and the
+  // driver's small runtime allocations (measured ~3 KB), with margin for untested
+  // paths. No PSRAM assumption.
+  static constexpr size_t kHeapReserve = 8192;
+  // Fallback when the hole cannot be held: the old contiguity rule.
   static constexpr size_t kMinLargestBlock = 16384;
   void releaseLastPair() {
     --chunkCount_;
@@ -63,6 +68,7 @@ public:
 #if LOOPER_MEM_DEBUG
     heap_caps_print_heap_info(kCaps);
 #endif
+    void* hole = heap_caps_malloc(kTaskHole, kCaps);
     while (chunkCount_ < wingie_loop::Loop::kMaxChunks &&
            heap_caps_get_free_size(kCaps) >= kHeapReserve + 2*chunk) {
       uint8_t* a = (uint8_t*)heap_caps_malloc(chunk, kCaps);
@@ -75,8 +81,12 @@ public:
       chunks_[1][chunkCount_] = b;
       ++chunkCount_;
     }
-    while (chunkCount_ && heap_caps_get_largest_free_block(kCaps) < kMinLargestBlock)
-      releaseLastPair();
+    if (hole) {
+      heap_caps_free(hole);
+    } else {
+      while (chunkCount_ && heap_caps_get_largest_free_block(kCaps) < kMinLargestBlock)
+        releaseLastPair();
+    }
     if (!chunkCount_) {
       Serial.printf("LOOPER_MEM allocation_failed reason=insufficient_heap\n");
       return false;

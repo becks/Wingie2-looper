@@ -14,8 +14,9 @@ struct LoopView {
 class Loop {
 public:
   // Storage is a table of fixed-size chunks so one loop can span several
-  // separate internal-RAM heap regions.
-  static constexpr unsigned kChunkBits = 12;
+  // separate internal-RAM heap regions. 2 KB chunks also fill the small
+  // fragments a 4 KB chunk cannot; 64 of them still hold ~26 s.
+  static constexpr unsigned kChunkBits = 11;
   static constexpr size_t kChunkSize = size_t(1) << kChunkBits;
   static constexpr size_t kMaxChunks = 64;
 private:

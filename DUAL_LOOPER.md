@@ -59,12 +59,15 @@ Audio is stored as 8-bit G.711 μ-law at 4.9 kHz while the codec and DSP continu
 at 44.1 kHz. Companding gives quiet and medium-level material more resolution than
 linear 8-bit PCM without increasing memory use. Each stored sample is the average of
 nine input samples, and playback is linearly interpolated. Loop memory is allocated as
-4 KB chunk pairs (one chunk per side) spread across the internal-RAM heap regions,
-leaving 32 KB of heap and a 16 KB contiguous block for later allocations. The firmware
+2 KB chunk pairs (one chunk per side) spread across the internal-RAM heap regions, so
+small heap fragments are used too. While the chunks are taken, one 12 KB block is held
+and then freed, so the audio and control task stacks created afterwards always find
+contiguous room; another 8 KB stays free for runtime use (about 9 KB remains free while
+running). The firmware
 links neither WiFi nor Bluetooth (not even `btStop()`), so the core releases the
 Bluetooth controller reserve and the WiFi statics are not included. The measured
-172,032-byte allocation (21 chunks per side, measured on v4.30-duallooper.6) provides
-approximately 17.55 seconds per side; the boot log prints the actual figure on a
+180,224-byte allocation (44 chunks per side) provides approximately 18.39 seconds per
+side (17.55 s up to v4.30-duallooper.6); the boot log prints the actual figure on a
 `LOOPER_MEM allocated=` line. PSRAM is not
 available on the tested unit. Recording automatically switches to playback when the
 buffer is full; that side's LED then blinks red/white for about 0.75 s. During playback

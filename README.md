@@ -1,7 +1,7 @@
 # Wingie2
 
 > This is a fork of [mengqimusic/Wingie2](https://github.com/mengqimusic/Wingie2)
-> with experimental dual asynchronous loopers: one audio looper (about 17.5 s) and one
+> with experimental dual asynchronous loopers: one audio looper (about 18.4 s) and one
 > panel note looper per side. See [Dual Looper documentation](DUAL_LOOPER.md) for controls,
 > MIDI, audio format, and build notes.
 > This is unofficial firmware: use it at your own risk.
