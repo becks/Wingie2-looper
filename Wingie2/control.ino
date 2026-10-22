@@ -29,10 +29,7 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     looperClearArmed[ch] = true;
     looperClearStarted[ch] = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u clear_armed=1\n", ch + 1);
-  } else if (keyIndex == 6) {  // F#: back to 1x
-    looperSpeedKey[ch] = -1;
-    applyLooperPanelSpeed(ch, 1.0f, false);
-  } else if (keyIndex == 5 || keyIndex == 7) {  // F down, G up: see the hold check in control()
+  } else if (keyIndex >= 5 && keyIndex <= 7) {  // F down, F# 1x, G up: see the hold check in control()
     looperSpeedKey[ch] = keyIndex;
     looperSpeedStarted[ch] = currentMillis;
   } else if (keyIndex == 8 || keyIndex == 10) {  // G# down, A#/Bb up
@@ -862,6 +859,7 @@ void control(void *pvParameters) {
 
     // F/G: released within half a second steps one interval (4th, 5th, octave
     // ladder); held that long jumps an octave from the current speed.
+    // F#: released early returns to 1x; held cycles varispeed / pitch / stretch.
     for (int ch = 0; ch < 2; ch++) {
       int speedKey = looperSpeedKey[ch];
       if (speedKey < 0) continue;
@@ -871,6 +869,21 @@ void control(void *pvParameters) {
       looperSpeedKey[ch] = -1;
       wingie_loop::LoopView view;
       dsp.looperView(ch, view);
+      if (speedKey == 6) {
+        if (!held) {
+          applyLooperPanelSpeed(ch, 1.0f, false);
+          continue;
+        }
+        // White varispeed, purple pitch, yellow stretch; seven blinks set it apart.
+        static const byte modeColors[wingie_loop::kSpeedModeCount] = {0, 3, 1};
+        int mode = (view.speedMode + 1) % wingie_loop::kSpeedModeCount;
+        dsp.setLooperSpeedMode(ch, mode);
+        led_blink = 7;
+        led_blink_color = ledColor[modeColors[mode]];
+        led_flash_timer = currentMillis;
+        Serial.printf("LOOPER_PANEL ch=%u speed_mode=%s\n", ch + 1, wingie_loop::speedModeName(mode));
+        continue;
+      }
       bool up = speedKey == 7;
       float speed = held ? wingie_loop::speedOctave(view.speed, up)
                          : up ? wingie_loop::speedStepUp(view.speed) : wingie_loop::speedStepDown(view.speed);

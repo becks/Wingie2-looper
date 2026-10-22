@@ -25,6 +25,7 @@ class LooperDSP : public decorator_dsp {
   size_t chunkCount_ = 0;
   std::atomic<int> command_[2] {{0}, {0}};
   std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.8f}, {0.8f}}, cross_[2] {{0}, {0}};
+  std::atomic<int> speedMode_[2] {{0}, {0}};
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
@@ -116,6 +117,7 @@ public:
     out.level = level_[ch].load();
     out.reverse = reverse_[ch].load();
     out.retention = retention_[ch].load();
+    out.speedMode = speedMode_[ch].load();
   }
   void peaks(int ch, uint8_t* out, size_t buckets) const {
     if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
@@ -132,6 +134,10 @@ public:
     if (ch >= 0 && ch < 2)
       speed_[ch].store(std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kSpeedMax, value)));
   }
+  // What the speed acts on: varispeed, pitch only or tempo only (SpeedMode).
+  void setSpeedMode(int ch, int mode) {
+    if (ch >= 0 && ch < 2 && mode >= 0 && mode < wingie_loop::kSpeedModeCount) speedMode_[ch].store(mode);
+  }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
@@ -144,6 +150,7 @@ public:
         break;
       case 82: level_[ch].store(value/127.0f); break;
       case 83: setRetention(ch, value/127.0f); break;
+      case 87: setSpeedMode(ch, wingie_loop::speedModeFromCC(value)); break;
       case 86: setSpeed(ch, wingie_loop::kSpeedSteps[wingie_loop::speedStepFromCC(value)]); break;
       case 84: cross_[ch].store(0.25f * value/127.0f); break;
       case 85: reverse_[ch].store(value >= 64); break;
@@ -194,11 +201,13 @@ private:
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
     float speed[2], level[2], retention[2], cross[2];
     bool reverse[2];
+    int mode[2];
     for (int ch=0; ch<2; ++ch) {
       int command = command_[ch].exchange(-1);
       if (command >= 0) loop_[ch].command(command);
       speed[ch]=std::max(0.25f, std::min(2.0f, speed_[ch].load()));
       reverse[ch]=reverse_[ch].load();
+      mode[ch]=speedMode_[ch].load();
       level[ch]=level_[ch].load();
       retention[ch]=retention_[ch].load(); cross[ch]=cross_[ch].load();
     }
@@ -220,12 +229,16 @@ private:
 #endif
       for (int ch=0; ch<2; ++ch) {
         if (!active[ch]) continue;
-        float step = speed[ch] / wingie_loop::Loop::rateDivision();
+        // Pitch mode keeps the play position at 1x and shifts the grains; stretch
+        // moves it at the speed while the grains keep the recorded pitch.
+        float tempo, pitch;
+        wingie_loop::speedModeRates(mode[ch], speed[ch], tempo, pitch);
+        float step = tempo / wingie_loop::Loop::rateDivision();
         const float* feedback = captureFeedback ? feedback_[1-ch] : nullptr;
         if (reverse[ch])
-          loop_[ch].processReverse(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch]);
+          loop_[ch].processReverse(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
         else
-          loop_[ch].process(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch]);
+          loop_[ch].process(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
       }
 #if LOOPER_PROFILE
       profBlockLoop_ += xthal_get_ccount() - loopStart;

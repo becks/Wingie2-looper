@@ -39,6 +39,24 @@ inline float speedOctave(float speed, bool up) {
   float next = up ? speed * 2 : speed / 2;
   return next < kSpeedMin ? kSpeedMin : next > kSpeedMax ? kSpeedMax : next;
 }
+// What the speed acts on: varispeed (tape: pitch and tempo together), pitch
+// only (the loop keeps its length) or tempo only (stretch: pitch kept).
+enum SpeedMode { kVarispeed = 0, kPitchMode = 1, kStretchMode = 2, kSpeedModeCount = 3 };
+inline const char* speedModeName(int mode) {
+  static const char* const names[kSpeedModeCount] = {"varispeed", "pitch", "stretch"};
+  return mode >= 0 && mode < kSpeedModeCount ? names[mode] : "?";
+}
+// CC 87: 0-42 varispeed, 43-85 pitch, 86-127 stretch.
+inline int speedModeFromCC(int value) {
+  if (value < 0) value = 0;
+  if (value > 127) value = 127;
+  return value / 43;
+}
+// Play-position step factor and grain pitch ratio for a mode at a speed.
+inline void speedModeRates(int mode, float speed, float& tempo, float& pitch) {
+  tempo = mode == kPitchMode ? 1.0f : speed;
+  pitch = mode == kPitchMode ? speed : mode == kStretchMode ? 1.0f / speed : 1.0f;
+}
 // CC 86: 0-127 in eight bands of 16; 64 is unison.
 inline int speedStepFromCC(int value) {
   if (value < 0) value = 0;

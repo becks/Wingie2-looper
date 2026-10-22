@@ -41,6 +41,17 @@ int main() {
   assert(speedStepFromCC(64) == kUnisonStep && speedStepFromCC(127) == 7);
   assert(speedStepFromCC(-3) == 0 && speedStepFromCC(200) == 7);
 
+  // CC 87 thirds and the rates each mode gives the engine.
+  assert(speedModeFromCC(0) == kVarispeed && speedModeFromCC(42) == kVarispeed);
+  assert(speedModeFromCC(43) == kPitchMode && speedModeFromCC(85) == kPitchMode);
+  assert(speedModeFromCC(86) == kStretchMode && speedModeFromCC(127) == kStretchMode);
+  assert(speedModeFromCC(300) == kStretchMode && strcmp(speedModeName(kPitchMode), "pitch") == 0);
+  float tempo, pitch;
+  speedModeRates(kVarispeed, 1.5f, tempo, pitch); assert(near(tempo, 1.5f) && near(pitch, 1));
+  speedModeRates(kPitchMode, 1.5f, tempo, pitch); assert(near(tempo, 1) && near(pitch, 1.5f));
+  // Stretch: grains read at the original rate, i.e. pitch * tempo == 1.
+  speedModeRates(kStretchMode, 0.5f, tempo, pitch); assert(near(tempo, 0.5f) && near(pitch * tempo, 1));
+
   printf("speed_steps_test passed\n");
   return 0;
 }
