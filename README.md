@@ -36,6 +36,16 @@ three seconds without pressing a key still saves preferences.
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 
+## Loop Monitor
+
+![Loop Monitor](doc/images/loop-monitor.png)
+
+[`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a read-only, single-file page that shows
+both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
+level and direction, the panel keys and controls, and input/output levels. Open it from disk in
+desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
+monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
+
 ![Wingie2 Front Small](https://user-images.githubusercontent.com/4593629/158756306-aa6c1218-f6ec-44c0-8c54-b04b49531801.jpg)
 
 [**如何建立编程环境**](https://github.com/mengqimusic/Wingie2#中文)（适用于想更改或编写固件的人，如果只想重刷固件请见右侧 Releases）
