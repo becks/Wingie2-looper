@@ -89,12 +89,16 @@
     .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
     .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: var(--muted); }
-    /* Pan and SOS are the controls the page writes (set_param); everything else is read-only. */
+    /* Pan, SOS and the speed steps are the controls the page writes (set_param); everything else is read-only. */
     .control { display: inline-flex; align-items: center; gap: 8px; }
     .control[hidden] { display: none; }
     .control input { width: 120px; accent-color: var(--wave); }
     .control b { min-width: 3.2em; text-align: right; }
     .side-head .control { margin-left: auto; }
+    .speed-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .speed-steps[hidden] { display: none; }
+    .speed-steps button { padding: 3px 8px; font-size: 12px; min-width: 3.6em; }
+    .speed-steps button[aria-pressed="true"] { background: var(--wave); border-color: var(--wave); color: var(--bg); }
     .meta b { color: var(--text); font-weight: 600; }
 
     section h3 {
@@ -251,9 +255,9 @@
         <div class="combo"><kbd>D</kbd><span>Audio: overdub</span></div>
         <div class="combo"><kbd>D#</kbd><span>Audio: bypass (keeps the loop)</span></div>
         <div class="combo"><kbd>Hold E</kbd><span>Audio: clear the loop (1 s)</span></div>
-        <div class="combo"><kbd>F</kbd><span>Audio: speed 0.5×</span></div>
+        <div class="combo"><kbd>F</kbd><span>Audio: speed down one step (4th, 5th, octave); hold ½ s: octave down</span></div>
         <div class="combo"><kbd>F#</kbd><span>Audio: speed 1×</span></div>
-        <div class="combo"><kbd>G</kbd><span>Audio: speed 2×</span></div>
+        <div class="combo"><kbd>G</kbd><span>Audio: speed up one step (4th, 5th, octave); hold ½ s: octave up</span></div>
         <div class="combo"><kbd>G#</kbd><span>Audio: loop level −</span></div>
         <div class="combo notes"><kbd>A</kbd><span>Notes: record → close and play → stop → play</span></div>
         <div class="combo notes"><kbd>Hold A</kbd><span>Notes: clear the sequence (1 s)</span></div>
@@ -268,11 +272,12 @@
         mode (not in Cave mode).</p>
     </section>
     <footer>
-      View over USB (Web Serial, Chrome or Edge). The only controls are each side's Pan and SOS:
-      Pan changes the running state (save it from the configuration page or by holding both Mode
-      buttons for 3 s); SOS is not saved and returns to 80% at power-on. Close the page before using
-      the Arduino serial monitor or the web flasher. Requires firmware v4.30-duallooper.5 or later;
-      Pan and SOS need v4.30-duallooper.6 or later.
+      View over USB (Web Serial, Chrome or Edge). The only controls are each side's Pan, SOS and
+      speed steps: Pan changes the running state (save it from the configuration page or by holding
+      both Mode buttons for 3 s); SOS and speed are not saved (SOS returns to 80%, speed to 1× at
+      power-on). Close the page before using the Arduino serial monitor or the web flasher. Requires
+      firmware v4.30-duallooper.5 or later; Pan and SOS need v4.30-duallooper.6 or later, the speed
+      steps v4.30-duallooper.7 or later.
     </footer>
   </main>
 
@@ -296,6 +301,7 @@
           <span>Direction <b data-direction>–</b></span>
           <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
+        <div class="speed-steps" data-speed-steps hidden role="group" aria-label="Speed steps" title="Speed in pure-ratio steps (MIDI CC 86). Speed also changes pitch and loop duration."></div>
       </section>
       <section>
         <h3>Note loop <span class="badge empty" data-notes-state>EMPTY</span></h3>
@@ -334,6 +340,13 @@
       pan: {toDevice: (v) => v, fromDevice: (v) => v, label: panLabel},
       sos: {toDevice: (v) => v / 100, fromDevice: (v) => Math.round(v * 100), label: (v) => v + "%"},
     };
+    // Interval steps (set_param speed_step, MIDI CC 86): the firmware's pure ratios.
+    const SPEED_STEPS = [
+      {ratio: 1 / 4, label: "−2 oct"}, {ratio: 1 / 2, label: "−oct"}, {ratio: 2 / 3, label: "−5th"},
+      {ratio: 3 / 4, label: "−4th"}, {ratio: 1, label: "1×"}, {ratio: 4 / 3, label: "+4th"},
+      {ratio: 3 / 2, label: "+5th"}, {ratio: 2, label: "+oct"},
+    ];
+    const UNISON_STEP = 4;
     // Panel ranges as the firmware applies them (decay in the DSP's units).
     const SLIDERS = [
       {key: "mix", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
@@ -379,6 +392,7 @@
     let fps = 4900;
     let lineMono;
     let steps = null;
+    let speedStepsSupported = false;
     let pollTimer = null;
     let statusBusy = false;
 
@@ -403,6 +417,15 @@
         ui.keys.appendChild(cell);
         return cell;
       });
+      ui.stepButtons = SPEED_STEPS.map((step, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = step.label;
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", () => sendSpeedStep(side, index));
+        ui.speedSteps.appendChild(button);
+        return button;
+      });
       for (const name of Object.keys(CONTROLS)) {
         ui[name].addEventListener("input", () => {
           const control = side.controls[name];
@@ -421,6 +444,20 @@
       const offset = Math.round((value - 0.5) * 200);
       if (offset === 0) return "C";
       return (offset < 0 ? "L" : "R") + " " + Math.abs(offset);
+    }
+
+    // Index of the step a polled speed sits on (printed with 3 decimals), or -1.
+    function speedStepIndex(speed) {
+      return SPEED_STEPS.findIndex((step) => Math.abs(speed - step.ratio) <= 0.002);
+    }
+
+    async function sendSpeedStep(side, index) {
+      if (!transport.connected) return;
+      try {
+        await request("set_param", {target: side.name, name: "speed_step", value: index});
+      } catch (error) {
+        setMessage("Speed not applied: " + error.message, true);
+      }
     }
 
     // One set_param in flight per side and control; the latest slider value wins.
@@ -595,6 +632,7 @@
         setConnection("wait", "Connecting…");
         const hello = await helloWhenReady();
         if (hello.device !== "Wingie2") throw new Error("not a Wingie2");
+        speedStepsSupported = (hello.capabilities || []).includes("speed_steps");
         try {
           await request("loop_status");
         } catch (error) {
@@ -874,7 +912,11 @@
           ? seconds(audio.length) + " / " + seconds(audio.capacity)
           : audio.length ? seconds(audio.length) : "–";
         ui.audioPosition.textContent = audio.length && audio.state >= 2 ? seconds(audioPosition(audio, elapsed)) : "–";
-        setValue(ui.speed, audio.speed.toFixed(2).replace(/\.?0+$/, "") + "×", now);
+        const stepIndex = speedStepIndex(audio.speed);
+        const interval = stepIndex >= 0 && stepIndex !== UNISON_STEP ? SPEED_STEPS[stepIndex].label + " · " : "";
+        setValue(ui.speed, interval + audio.speed.toFixed(2).replace(/\.?0+$/, "") + "×", now);
+        ui.speedSteps.hidden = !speedStepsSupported;
+        ui.stepButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(index === stepIndex)));
         setValue(ui.level, Math.round(audio.level * 100) + "%", now);
         setValue(ui.direction, audio.reverse ? "Reverse" : "Forward", now);
         setBadge(ui.notesState, notesBadge(notes.state));

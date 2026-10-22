@@ -32,6 +32,7 @@
 #include "device_state.h"
 #include "mpe_state.h"
 #include "note_looper.h"
+#include "speed_steps.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
 #include <MIDI.h>
@@ -162,6 +163,9 @@ bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
 bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
+// F/G in the looper layer: the key held (-1 none) and when, decided on release or hold.
+int8_t looperSpeedKey[2] = {-1, -1};
+unsigned long looperSpeedStarted[2] = {0, 0};
 // Per-side red/white blink when a full recording buffer switches itself to playback.
 uint8_t looperFullBlink[2] = {0, 0};
 unsigned long looperFullTimer[2] = {0, 0};
@@ -301,6 +305,7 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define RATIO_LED_INTERVAL 500
 #define SAVE_DELAY 3000
 #define LOOPER_CLEAR_HOLD_MS 1000
+#define LOOPER_OCTAVE_HOLD_MS 500
 #define LOOPER_FULL_BLINK_STEPS 7  // six 125 ms colour steps, then restore the mode colour
 #define LOOPER_FULL_BLINK_MS 125
 #define LOOPER_WRAP_FLASH_MS 120
@@ -348,7 +353,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     control,        /* Task function. */
     "control",      /* name of task. */
-    10000,          /* Stack size of task */
+    7168,           /* Stack size of task (peak use measured ~2.2 KB) */
     NULL,           /* parameter of the task */
     1,              /* priority of the task */
     &controlCore,   /* Task handle to keep track of created task */

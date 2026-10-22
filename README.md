@@ -1,7 +1,7 @@
 # Wingie2
 
 > This is a fork of [mengqimusic/Wingie2](https://github.com/mengqimusic/Wingie2)
-> with experimental dual asynchronous loopers: one audio looper (about 17.5 s) and one
+> with experimental dual asynchronous loopers: one audio looper (about 18.4 s) and one
 > panel note looper per side. See [Dual Looper documentation](DUAL_LOOPER.md) for controls,
 > MIDI, audio format, and build notes.
 > This is unofficial firmware: use it at your own risk.
@@ -21,7 +21,8 @@ Hold both Mode buttons, then press a key on the side whose looper you want to co
 | D | Audio: overdub |
 | D# | Audio: bypass (keeps the loop) |
 | Hold E (1 s) | Audio: clear the loop |
-| F / F# / G | Audio: speed 0.5× / 1× / 2× |
+| F / G | Audio: speed one step down / up (4th, 5th, octave); hold ½ s: an octave |
+| F# | Audio: speed 1× |
 | G# | Audio: loop level − |
 | **A** | **Notes: record → close and play → stop → play** |
 | **Hold A (1 s)** | **Notes: clear the sequence** |
@@ -33,6 +34,11 @@ press both Mode buttons + A again to close the loop. Recorded notes follow the c
 octave and mode (not recorded or replayed in Cave mode). Holding both Mode buttons for
 three seconds without pressing a key still saves preferences.
 
+Speed steps are pure ratios: 1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2 (two octaves down to an octave
+up, through fourths and fifths). A short F or G press moves one step from the current speed;
+holding it for half a second halves or doubles the speed instead. Speed also changes pitch and
+loop duration, like tape, and returns to 1× at power-on.
+
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 
@@ -43,8 +49,9 @@ each audio loop restart flashes the side purple (white in Cave mode).
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
 level and direction, the panel keys and controls, and input/output levels. Its only controls are each
-side's Pan slider (see below) and SOS slider: sound on sound, the share of the loop kept on each
-overdub pass (0–100%, same as MIDI CC 83). SOS starts at 80% and is not saved. Open it from disk in
+side's Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
+overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved) and speed step buttons
+(the same steps as F/G, MIDI CC 86). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
 

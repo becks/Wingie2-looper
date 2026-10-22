@@ -246,6 +246,15 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Looper speed as an interval step (as MIDI CC 86): 0-7, 4 is unison. Runtime only.
+    if (strcmp(request.name, "speed_step") == 0) {
+      int step;
+      if (!quantizeIntegerParameter(request.value, 0, wingie_loop::kSpeedStepCount - 1, step)) return false;
+      dsp.setLooperSpeed(ch, wingie_loop::kSpeedSteps[step]);
+      canonical = step;
+      return true;
+    }
+
     if (strcmp(request.name, "pan") == 0) {
       if (!quantizeParameter(request.value, wingie_config::kPanMin, wingie_config::kPanMax,
                              wingie_config::kPanStep, canonical))

@@ -72,11 +72,12 @@ int main() {
     assert(chunked.takeWrapped() && !chunked.takeWrapped());
   }
 
-  // A float position drifts by percent-level amounts at ~150k frames; the
+  // A float position drifts by percent-level amounts past ~100k frames; the
   // split integer/fraction position must return to the start after one cycle.
   {
-    const size_t frames = 150000;
-    std::vector<uint8_t> big(frames + 1000);
+    const size_t capacity = wingie_loop::Loop::kMaxChunks * wingie_loop::Loop::kChunkSize;
+    const size_t frames = capacity - 1000;
+    std::vector<uint8_t> big(capacity);
     wingie_loop::Loop longLoop;
     longLoop.attach(big.data(), big.size());
     longLoop.command(1);

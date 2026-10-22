@@ -521,7 +521,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn("store.putBool", self.storage_source)
         self.assertIn('"mpe_enabled\\":%s', self.response_source)
         self.assertIn('"line_input_mono\\":%s', self.response_source)
-        self.assertIn('"capabilities\\\":[\\\"settings\\\",\\\"ratio_mode\\\",\\\"cave_config\\\",\\\"mpe\\\"]', self.response_source)
+        self.assertIn('"capabilities\\\":[\\\"settings\\\",\\\"ratio_mode\\\",\\\"cave_config\\\",\\\"mpe\\\",\\\"speed_steps\\\"]', self.response_source)
         self.assertIn('"config_schema\\":6', self.response_source)
         self.assertRegex(
             self.storage_source,
