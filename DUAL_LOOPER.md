@@ -63,7 +63,7 @@ nine input samples, and playback is linearly interpolated. Loop memory is alloca
 leaving 32 KB of heap and a 16 KB contiguous block for later allocations. The firmware
 links neither WiFi nor Bluetooth (not even `btStop()`), so the core releases the
 Bluetooth controller reserve and the WiFi statics are not included. The measured
-172,032-byte allocation (21 chunks per side, measured on v4.30-duallooper.5) provides
+172,032-byte allocation (21 chunks per side, measured on v4.30-duallooper.6) provides
 approximately 17.55 seconds per side; the boot log prints the actual figure on a
 `LOOPER_MEM allocated=` line. PSRAM is not
 available on the tested unit. Recording automatically switches to playback when the
