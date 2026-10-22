@@ -73,6 +73,8 @@
     .strip-head .clip { color: var(--rec); font-weight: 700; visibility: hidden; }
     .strip-head .clip.on { visibility: visible; }
     canvas.strip { height: 44px; }
+    /* Dot level meter under each strip: white dots, red while the channel clips. */
+    canvas.vu { height: 16px; margin-top: 4px; }
 
     .sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     @media (max-width: 820px) { .sides { grid-template-columns: 1fr; } }
@@ -235,13 +237,13 @@
       <div class="io-grid">
         <div class="io-column">
           <h3 style="margin:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em">Input <span id="io-source"></span></h3>
-          <div data-strip="0"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
-          <div data-strip="1"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+          <div data-strip="0"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas><canvas class="vu" data-meter aria-hidden="true"></canvas></div>
+          <div data-strip="1"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas><canvas class="vu" data-meter aria-hidden="true"></canvas></div>
         </div>
         <div class="io-column">
           <h3 style="margin:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em">Output</h3>
-          <div data-strip="2"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
-          <div data-strip="3"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas></div>
+          <div data-strip="2"><div class="strip-head"><span data-label>Left</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas><canvas class="vu" data-meter aria-hidden="true"></canvas></div>
+          <div data-strip="3"><div class="strip-head"><span data-label>Right</span><span><span class="clip" data-clip>CLIP</span> <b data-db>–</b></span></div><canvas class="strip"></canvas><canvas class="vu" data-meter aria-hidden="true"></canvas></div>
         </div>
       </div>
     </section>
@@ -1050,6 +1052,10 @@
     const LEVEL_RATE = 44100 / 64 / 8;
     const HISTORY = Math.round(LEVEL_RATE * 5);
     const CLIP_HOLD_MS = 1500;
+    // Dot meter: -48 to 0 dB, quick attack, steady fall and a held peak dot.
+    const METER_FLOOR_DB = -48;
+    const METER_FALL_DB_PER_S = 24;
+    const METER_PEAK_HOLD_MS = 1000;
     const io = {
       monoActive: false,
       source: "",
@@ -1064,6 +1070,11 @@
         label: element.querySelector("[data-label]"),
         db: element.querySelector("[data-db]"),
         clip: element.querySelector("[data-clip]"),
+        meter: element.querySelector("[data-meter]"),
+        level: METER_FLOOR_DB,
+        peak: METER_FLOOR_DB,
+        peakUntil: 0,
+        meterTime: 0,
       })),
       sourceLabel: document.getElementById("io-source"),
     };
@@ -1115,6 +1126,36 @@
       const last = codes.slice(-8).reduce((a, b) => Math.max(a, b), 0);
       strip.db.textContent = last ? (last >= 255 ? "0 dB" : levelDb(last).toFixed(0) + " dB") : "–∞";
       strip.clip.classList.toggle("on", io.clipUntil[channel] > now);
+      drawMeter(strip, codes, now, channel);
+    }
+
+    function drawMeter(strip, codes, now, channel) {
+      const {context, width, height, ratio} = fitCanvas(strip.meter);
+      const recent = codes.slice(-3).reduce((a, b) => Math.max(a, b), 0);
+      const db = recent ? Math.max(METER_FLOOR_DB, Math.min(0, levelDb(recent))) : METER_FLOOR_DB;
+      const elapsed = strip.meterTime ? Math.min(250, now - strip.meterTime) / 1000 : 0;
+      strip.meterTime = now;
+      strip.level = Math.max(db, strip.level - METER_FALL_DB_PER_S * elapsed);
+      if (db >= strip.peak || now > strip.peakUntil) {
+        strip.peak = db;
+        strip.peakUntil = now + METER_PEAK_HOLD_MS;
+      }
+      const style = getComputedStyle(document.documentElement);
+      const lit = style.getPropertyValue(io.clipUntil[channel] > now ? "--rec" : "--wave");
+      const unlit = style.getPropertyValue("--line");
+      const pitch = 9 * ratio, radius = 2.6 * ratio;
+      const count = Math.max(8, Math.floor((width - 8 * ratio) / pitch) + 1);
+      const left = (width - (count - 1) * pitch) / 2, middle = height / 2;
+      const dbAt = (index) => METER_FLOOR_DB + ((index + 1) / count) * -METER_FLOOR_DB;
+      const peakIndex = strip.peak > METER_FLOOR_DB
+        ? Math.min(count - 1, Math.ceil(((strip.peak - METER_FLOOR_DB) / -METER_FLOOR_DB) * count) - 1) : -1;
+      for (let index = 0; index < count; index++) {
+        const on = strip.level > METER_FLOOR_DB && strip.level >= dbAt(index) - -METER_FLOOR_DB / count;
+        context.fillStyle = on || index === peakIndex ? lit : unlit;
+        context.beginPath();
+        context.arc(left + index * pitch, middle, radius, 0, Math.PI * 2);
+        context.fill();
+      }
     }
 
     function renderIo(now) {

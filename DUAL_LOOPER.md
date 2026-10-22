@@ -97,7 +97,7 @@ synchronization, audio persistence, or automatic pitch modulation.
 
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
-keys and controls, and input/output levels. Its only controls are each side's Pan and
+keys and controls, and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
 (`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
