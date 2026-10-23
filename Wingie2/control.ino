@@ -12,9 +12,28 @@ void applyLooperPanelSpeed(byte ch, float speed, bool octave) {
                 step >= 0 ? speedStepName(step) : "none", octave ? " octave=1" : "");
 }
 
+// The looper layer: both Mode buttons held, or latched with neither held.
+bool looperLayerActive() {
+  const bool bothHeld = !modeButtonState[0] && !modeButtonState[1];
+  return bothHeld || (looperLatched && modeButtonState[0] && modeButtonState[1]);
+}
+
+void setLooperLatched(bool latched) {
+  looperLatched = latched;
+  looperLatchFlashOn = false;
+  looperLatchFlashTimer = currentMillis;
+  led_blink = latched ? 4 : 2;  // red on, white off
+  led_blink_color = ledColor[latched ? 2 : 0];
+  led_flash_timer = currentMillis;
+  Serial.printf("LOOPER_PANEL latch=%s\n", latched ? "on" : "off");
+}
+
 void looperPanelCommand(byte ch, byte keyIndex) {
-  looperPanelGesture = true;
-  save_routine_flag = false;
+  // Only a command given while holding both Mode buttons cancels their tap.
+  if (!modeButtonState[0] && !modeButtonState[1]) {
+    looperPanelGesture = true;
+    save_routine_flag = false;
+  }
 
   static const byte commands[4] = {1, 2, 3, 0};
   static const char *names[4] = {"record", "play", "overdub", "bypass"};
@@ -224,6 +243,7 @@ void control(void *pvParameters) {
     prefs.putChar("alt_tuning_idx", -1);
     prefs.putBool("mpe_enabled", false);
     prefs.putBool("line_input_mono", false);
+    prefs.putBool("looper_latch", false);
     prefs.putFloat("left_pan", wingie_config::kDefaultPan[0]);
     prefs.putFloat("right_pan", wingie_config::kDefaultPan[1]);
     prefs.putBool("unq_caves_store", false);
@@ -263,6 +283,8 @@ void control(void *pvParameters) {
   line_input_mono = prefs.getBool("line_input_mono", false);
   apply_line_input_mono();
   Serial.printf("line_input_mono = %d, active = %d\n", line_input_mono, line_input_mono_active);
+  looper_latch = prefs.getBool("looper_latch", false);
+  Serial.printf("looper_latch = %d\n", looper_latch);
   float a3_freq_offset = prefs.getFloat("a3_freq_offset", 0);
   a3_freq = 440. + a3_freq_offset;
   dsp.setParamValue("a3_freq", a3_freq);
@@ -463,6 +485,16 @@ void control(void *pvParameters) {
     apply_line_input_mono();
     persist_line_input_mono_now();
     Serial.printf("Boot C+C toggled line_input_mono = %d\n", line_input_mono);
+  }
+
+  // Boot B+B: toggles the looper latch and saves it at once; red for on, white for off.
+  if (!key[0][11] && !key[1][11]) {
+    looper_latch = !looper_latch;
+    persist_looper_latch_now();
+    led_blink = 8;
+    led_blink_color = ledColor[looper_latch ? 2 : 0];
+    led_flash_timer = millis();
+    Serial.printf("Boot B+B toggled looper_latch = %d\n", looper_latch);
   }
 
   if (modeButtonState[0] && modeButtonState[1]) {
@@ -710,8 +742,13 @@ void control(void *pvParameters) {
         if (!modeButtonState[ch]) {
           if (!modeButtonPressed[ch]) controlActivity.modeButton[ch]++;
           modeButtonPressed[ch] = true;
+          if (modeButtonPressed[0] && modeButtonPressed[1]) bothModeGesture = true;
         } else if (modeButtonState[ch]) {
-          if (modeButtonPressed[ch] && !threshChanged[ch] && !stuff_saved && !looperPanelGesture) modeChangingFromKeys[ch] = true;
+          // With the latch on, a tap of both Mode buttons toggles the looper layer
+          // (decided once both are up) instead of changing modes.
+          const bool latchTap = looper_latch && bothModeGesture;
+          if (modeButtonPressed[ch] && !threshChanged[ch] && !stuff_saved && !looperPanelGesture && !latchTap) modeChangingFromKeys[ch] = true;
+          if (threshChanged[ch]) bothModeGesture = false;
           threshChanged[ch] = false;
           modeButtonPressed[ch] = false;
         }
@@ -728,9 +765,9 @@ void control(void *pvParameters) {
             if (!key[ch][i]) {
               controlActivity.key[ch][i]++;
 
-              if (!modeButtonState[0] && !modeButtonState[1]) {
-                // Both Mode buttons select the panel looper layer. Commands are
-                // independent for the left and right mini keyboards.
+              if (looperLayerActive()) {
+                // Both Mode buttons (or the latch) select the panel looper layer.
+                // Commands are independent for the left and right mini keyboards.
                 looperPanelCommand(ch, i);
               }
 
@@ -841,11 +878,11 @@ void control(void *pvParameters) {
       }
     }
 
-    // Clear requires a deliberate one-second hold on E while both Mode buttons
-    // remain down. Never print or mutate the looper from the audio task.
+    // Clear requires a deliberate one-second hold on E while the looper layer
+    // stays active. Never print or mutate the looper from the audio task.
     for (int ch = 0; ch < 2; ch++) {
       if (!looperClearArmed[ch]) continue;
-      if (modeButtonState[0] || modeButtonState[1] || key[ch][4]) {
+      if (!looperLayerActive() || key[ch][4]) {
         looperClearArmed[ch] = false;
       } else if (currentMillis - looperClearStarted[ch] >= LOOPER_CLEAR_HOLD_MS) {
         looperClearArmed[ch] = false;
@@ -892,7 +929,7 @@ void control(void *pvParameters) {
 
     for (int ch = 0; ch < 2; ch++) {
       if (noteLoopClearArmed[ch]) {
-        if (modeButtonState[0] || modeButtonState[1] || key[ch][9]) {
+        if (!looperLayerActive() || key[ch][9]) {
           noteLoopClearArmed[ch] = false;
         } else if (currentMillis - noteLoopClearStarted[ch] >= LOOPER_CLEAR_HOLD_MS) {
           noteLoopClearArmed[ch] = false;
@@ -913,7 +950,7 @@ void control(void *pvParameters) {
     for (int ch = 0; ch < 2; ch++) {
       int cave = oct[ch] + 1;
 
-      if (Mode[ch] == CAVE_MODE && !looperPanelGesture) {
+      if (Mode[ch] == CAVE_MODE && !looperPanelGesture && !looperLatched) {
 
         if (!key[ch][4] or !key[ch][5]) {
           int adj[2];
@@ -979,7 +1016,14 @@ void control(void *pvParameters) {
       led_flash_color = 0;
     }
 
+    // Turning the latch off (boot, config page) also unlocks the layer.
+    if (looperLatched && !looper_latch) setLooperLatched(false);
+
     if (!modeButtonPressed[0] && !modeButtonPressed[1]) {
+      if (bothModeGesture) {
+        bothModeGesture = false;
+        if (looper_latch && !looperPanelGesture && !stuff_saved) setLooperLatched(!looperLatched);
+      }
       save_routine_flag = false;
       stuff_saved = false;
       looperPanelGesture = false;
@@ -1038,6 +1082,26 @@ void control(void *pvParameters) {
           ratio_led_phase[ch] = 0;
           ratio_led_timer[ch] = currentMillis;
           set_mode_led(ch);
+        }
+      }
+    }
+
+    // Latched looper layer: a short red flash (white in red Bar mode) over the mode colour.
+    if (!looperLatched) {
+      looperLatchFlashOn = false;
+    } else if (!led_blink && !save_routine_flag) {
+      const unsigned long wait = looperLatchFlashOn ? LOOPER_LATCH_FLASH_MS : LOOPER_LATCH_FLASH_INTERVAL;
+      if (currentMillis - looperLatchFlashTimer >= wait) {
+        looperLatchFlashTimer = currentMillis;
+        looperLatchFlashOn = !looperLatchFlashOn;
+        for (int ch = 0; ch < 2; ch++) {
+          if (looperFullBlink[ch] || looperWrapFlash[ch]) continue;
+          if (!looperLatchFlashOn) {
+            set_mode_led(ch);
+            continue;
+          }
+          byte color = ledColor[Mode[ch] == BAR_MODE ? 0 : 2];
+          for (int i = 0; i < 2; i++) digitalWrite(ledPin[ch][i], !bitRead(color, i));
         }
       }
     }

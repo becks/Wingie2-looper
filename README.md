@@ -34,6 +34,15 @@ press both Mode buttons + A again to close the loop. Recorded notes follow the c
 octave and mode (not recorded or replayed in Cave mode). Holding both Mode buttons for
 three seconds without pressing a key still saves preferences.
 
+**Looper latch.** To use the looper layer without holding the Mode buttons, power on while
+holding both B keys (the LEDs show red for latch on, white for off; saved at once), or set
+Looper Latch in the configuration page. With the latch on, a tap of both Mode buttons locks the
+looper layer and another tap unlocks it (red / white blinks); while it is locked the keys act as
+in the table above without holding Mode, and both LEDs flash red briefly every 1.2 s (white in
+Bar mode). Holding both Mode buttons, the three-second save and single-Mode mode changes work
+as before; only the tap of both Mode buttons, which otherwise changes both sides' modes, is
+taken over.
+
 Speed steps are pure ratios: 1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2 (two octaves down to an octave
 up, through fourths and fifths). A short F or G press moves one step from the current speed;
 holding it for half a second halves or doubles the speed instead. Speed returns to 1× at power-on.
@@ -103,7 +112,7 @@ CC 10 = 64 is the center). A pan received over MIDI is also kept by the next Sav
 运行的共享实体旋钮参数，直接由 Wingie2 面板控制，不写入 flash。
 
 Save 会持久化 A3、Tuning、Pre/Post Clip Gain、三个 MIDI 通道路由、左右 Mode 与 Input
-Threshold、MPE 开关、线路输入立体声/单声道、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
+Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
 左右声道共用，9 个 ratio 按每 3 个一组分为 Voice 1/2/3；Ratio 模式下三个复音分别使用
 Voice 1/2/3 的比例，页面提供“复制 Voice 1 到 Voice 2、3”按钮将 Voice 1 的比例复制到另外两组 Voice。
 Factory Ratio 和导入配置都先改变运行状态，仍需 Save。Cave 频率范围为
@@ -141,7 +150,7 @@ not display or edit Mix, Decay, or Volume: those are runtime-only shared physica
 and are not written to flash.
 
 Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode, Input
-Threshold and Pan, the MPE switch, line-input stereo/mono, the shared Ratio profile, and all three Cave banks
+Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, the shared Ratio profile, and all three Cave banks
 for each channel, including frequency and mute. The shared Ratio profile's nine ratios are grouped into Voices 1/2/3, three ratios per
 voice; in Ratio polyphonic mode, the three voices use the ratios of Voices 1/2/3 respectively, and the
 “Copy Voice 1 to Voices 2&3” button copies Voice 1's ratios into the other two voices. Factory Ratio

@@ -46,6 +46,7 @@ enum SettingsDirtyIndex {
   kDirtyLineInputMono,
   kDirtyLeftPan,
   kDirtyRightPan,
+  kDirtyLooperLatch,
   kDirtyCount
 };
 

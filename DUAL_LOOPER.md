@@ -15,6 +15,12 @@ to playback, D enables overdub, D# returns to bypass while preserving the loop, 
 holding E for one second clears the loop. A looper gesture suppresses the normal mode
 change and save actions associated with the Mode buttons. Holding both Mode buttons
 for three seconds without pressing a note continues to save preferences normally.
+With the looper latch on (toggled by holding both B keys at power-on, red for on and white
+for off, or by Looper Latch in the configuration page; saved), a tap of both Mode buttons
+locks the looper layer instead of changing both sides' modes, and another tap unlocks it.
+While locked, the keys give the commands below without holding Mode, including the E, F, F#,
+G and A holds, and both LEDs flash red for 120 ms every 1.2 s (white in Bar mode). Holding a
+single Mode button still sets threshold or gain, and its tap still changes that side's mode.
 While holding both Mode buttons, F and G move that side's loop speed one step down or
 up through pure-ratio fourths, fifths and octaves (1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2);
 holding F or G for half a second jumps an octave from the current speed instead (within

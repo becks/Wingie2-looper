@@ -29,7 +29,8 @@
       post_clip_gain: 0.55,
       midi: {left: 13, right: 14, both: 15},
       mpe_enabled: false,
-      line_input_mono: false
+      line_input_mono: false,
+      looper_latch: false
     }
   };
 
@@ -83,7 +84,8 @@
       pre_clip_gain: [0.0825, 0.99, 0.0825, true], post_clip_gain: [0.385, 0.99, 0.055, true],
       midi_left: [1, 16, 1, true], midi_right: [1, 16, 1, true], midi_both: [1, 16, 1, true],
       mpe_enabled: [0, 1, 1, true],
-      line_input_mono: [0, 1, 1, true]
+      line_input_mono: [0, 1, 1, true],
+      looper_latch: [0, 1, 1, true]
     }
   };
 

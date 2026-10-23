@@ -98,6 +98,7 @@ static void testSettings() {
   shared.midiBoth = 3;
   shared.mpeEnabled = false;
   shared.lineInputMono = false;
+  shared.looperLatch = true;
 
   JsonResponse response;
   encodeSettings(response, 2, true, true, true, left, right, shared);
@@ -106,7 +107,7 @@ static void testSettings() {
       "\"dirty_all\":true,\"left\":{\"mode\":1,\"mix\":0.5000,\"decay\":2.5000,\"volume\":0.7500,\"threshold\":0.4125,\"pan\":0.0000},"
       "\"right\":{\"mode\":2,\"mix\":0.2500,\"decay\":1.0000,\"volume\":0.5000,\"threshold\":0.9900,\"pan\":0.7500},"
       "\"shared\":{\"a3_hz\":440.00,\"tuning\":-1,\"pre_clip_gain\":0.2475,\"post_clip_gain\":0.8250,"
-      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false},"
+      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false,\"looper_latch\":true},"
       "\"limits\":{\"mode\":[0,4,1],"
       "\"threshold\":[0.0825,0.99,0.0825],"
       "\"pan\":[0,1,0.01],"
@@ -115,14 +116,15 @@ static void testSettings() {
       "\"pre_clip_gain\":[0.0825,0.99,0.0825],"
       "\"post_clip_gain\":[0.385,0.99,0.055],"
       "\"midi_left\":[1,16,1],\"midi_right\":[1,16,1],\"midi_both\":[1,16,1],"
-      "\"mpe_enabled\":[0,1,1],\"line_input_mono\":[0,1,1]}}");
+      "\"mpe_enabled\":[0,1,1],\"line_input_mono\":[0,1,1],\"looper_latch\":[0,1,1]}}");
 
   shared.mpeEnabled = true;
+  shared.looperLatch = false;
   JsonResponse micResponse;
   encodeSettings(micResponse, 3, false, false, false, left, right, shared);
   assert(strstr(micResponse.data, "\"source\":\"mic\",\"dirty\":false") != nullptr);
   assert(strstr(micResponse.data, "\"dirty_all\":false") != nullptr);
-  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false},\"limits\":{") != nullptr);
+  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false,\"looper_latch\":false},\"limits\":{") != nullptr);
 }
 
 static void testRatioProfile() {
