@@ -5,7 +5,7 @@
 > panel note looper per side. See [Dual Looper documentation](DUAL_LOOPER.md) for controls,
 > MIDI, audio format, and build notes.
 > This is unofficial firmware: use it at your own risk.
-> To flash the current release, open the [standalone web flasher](https://github.com/becks/Wingie2-looper/releases/download/v4.30-duallooper.8/Wingie2-v4.30-duallooper.8.standalone.html)
+> To flash the current release, open the [standalone web flasher](https://github.com/becks/Wingie2-looper/releases/download/v4.30-duallooper.9/Wingie2-v4.30-duallooper.9.standalone.html)
 > in desktop Chrome or Edge.
 
 ## Dual Looper quick controls
