@@ -64,7 +64,7 @@ each audio loop restart flashes the side purple (white in Cave mode).
 
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
-level and direction, the panel keys and controls, and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
+level and direction, the panel keys and controls, the looper latch (Off / On / Locked), and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
 side's Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
 (varispeed / pitch / stretch, MIDI CC 87) and speed step buttons (the same steps as F/G, MIDI CC 86). Open it from disk in

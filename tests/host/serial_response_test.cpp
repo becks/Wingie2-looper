@@ -277,6 +277,7 @@ static void testLoopMonitor() {
   status.ms = 1234;
   status.frameRate = 4900;
   status.lineInputMono = true;
+  status.looperLatch = 2;
   status.threshold[0] = 0.0825f;
   status.threshold[1] = 0.99f;
   status.preClipGain = 0.2475f;
@@ -294,7 +295,7 @@ static void testLoopMonitor() {
   JsonResponse statusResponse;
   encodeLoopStatus(statusResponse, 5, status);
   checkResponse(statusResponse,
-      "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,"
+      "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,\"latch\":2,"
       "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
       "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800,2],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500]},"
       "{\"a\":[0,0,0,0,2.000,0.000,0,0.000,0],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000]}],"

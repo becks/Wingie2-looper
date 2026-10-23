@@ -494,6 +494,7 @@ void sendLoopStatus(uint32_t id) {
   const uint32_t now = millis();
   snapshot.ms = now;
   snapshot.lineInputMono = line_input_mono;
+  snapshot.looperLatch = looper_latch ? (looperLatched ? 2 : 1) : 0;
   snapshot.threshold[0] = left_thresh;
   snapshot.threshold[1] = right_thresh;
   snapshot.preClipGain = pre_clip_gain;

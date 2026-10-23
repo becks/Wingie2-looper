@@ -126,6 +126,7 @@ struct LoopStatusSnapshot {
   uint32_t ms;
   uint32_t frameRate;
   bool lineInputMono;  // toggled by holding both C keys at boot
+  int looperLatch;     // 0 off, 1 on, 2 on with the looper layer locked
   float threshold[2];  // sequencer threshold per side
   float preClipGain;
   float postClipGain;
@@ -335,10 +336,11 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
-                  "\"ms\":%lu,\"fps\":%lu,\"mono\":%d,"
+                  "\"ms\":%lu,\"fps\":%lu,\"mono\":%d,\"latch\":%d,"
                   "\"t\":[%.4f,%.4f],\"g\":[%.4f,%.4f],\"sides\":[",
                   static_cast<unsigned long>(id), static_cast<unsigned long>(snapshot.ms),
                   static_cast<unsigned long>(snapshot.frameRate), snapshot.lineInputMono ? 1 : 0,
+                  snapshot.looperLatch,
                   snapshot.threshold[0], snapshot.threshold[1], snapshot.preClipGain,
                   snapshot.postClipGain);
   for (int ch = 0; ch < 2; ch++) {
