@@ -1027,10 +1027,8 @@ void control(void *pvParameters) {
       save_routine_flag = false;
       stuff_saved = false;
       looperPanelGesture = false;
-      looperClearArmed[0] = false;
-      looperClearArmed[1] = false;
-      noteLoopClearArmed[0] = false;
-      noteLoopClearArmed[1] = false;
+      // The E/A clear holds disarm themselves once the looper layer is inactive,
+      // so a latched layer keeps them armed with no Mode button down.
     }
 
     if (save_routine_flag) {
