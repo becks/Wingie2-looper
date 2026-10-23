@@ -91,8 +91,10 @@
     .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
     .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: var(--muted); }
+    #latch { min-width: 0; text-align: left; }
     #latch.locked { color: var(--rec); }
-    /* Pan, SOS and the speed steps are the controls the page writes (set_param); everything else is read-only. */
+    #latch-meta input, #live-wrap input { width: auto; margin: 0; }
+    /* Pan, SOS, the speed steps and live input are the controls the page writes (set_param); everything else is read-only. */
     .control { display: inline-flex; align-items: center; gap: 8px; }
     .control[hidden] { display: none; }
     .control input { width: 120px; accent-color: var(--wave); }
@@ -216,7 +218,8 @@
     <header>
       <h1>Wingie2 Loop Monitor</h1>
       <span class="meta">Line input <b id="mono">–</b></span>
-      <span class="meta" id="latch-meta" hidden>Looper latch <b id="latch">–</b></span>
+      <label class="meta control" id="latch-meta" hidden title="Tap both Mode buttons to lock or unlock the looper layer instead of holding them. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s (holding B+B at power-on toggles and saves it)."><input type="checkbox" id="latch-check"> Looper latch <b id="latch">–</b></label>
+      <label class="meta control" id="live-wrap" hidden title="Both sides: hear the live input at -6 dB while a loop plays (otherwise the loop replaces it). Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s."><input type="checkbox" id="live"> Live input in playback</label>
       <div class="connection">
         <span class="dot" id="dot"></span>
         <span id="status">Disconnected</span>
@@ -403,6 +406,12 @@
     let fps = 4900;
     let lineMono;
     let looperLatch;  // 0 off, 1 on, 2 on with the looper layer locked; undefined on older firmware
+    let looperLiveInput;  // 0/1; undefined on older firmware
+    // Header checkboxes written with set_param (shared): poll updates wait while one is in flight.
+    const FLAGS = {
+      latch: {name: "looper_latch", label: "Latch", holdUntil: 0, busy: false},
+      live: {name: "looper_live_input", label: "Live input", holdUntil: 0, busy: false},
+    };
     let steps = null;
     let speedStepsSupported = false;
     let speedModesSupported = false;
@@ -492,6 +501,23 @@
       } catch (error) {
         setMessage("Speed mode not applied: " + error.message, true);
       }
+    }
+
+    async function sendFlag(flag, on) {
+      if (!transport.connected) return;
+      flag.busy = true;
+      try {
+        await request("set_param", {target: "shared", name: flag.name, value: on ? 1 : 0});
+      } catch (error) {
+        setMessage(flag.label + " not applied: " + error.message, true);
+      } finally {
+        flag.busy = false;
+        flag.holdUntil = performance.now() + CONTROL_HOLD_MS;
+      }
+    }
+
+    function flagIdle(flag, now) {
+      return !flag.busy && now > flag.holdUntil;
     }
 
     // One set_param in flight per side and control; the latest slider value wins.
@@ -741,6 +767,7 @@
         fps = status.fps || fps;
         lineMono = status.mono;
         looperLatch = status.latch;
+        looperLiveInput = status.live;
         if (status.lv) {
           io.monoActive = !!status.mono_active;
           io.source = status.src || "";
@@ -1028,7 +1055,11 @@
     const monoElement = document.getElementById("mono");
     const latchMeta = document.getElementById("latch-meta");
     const latchElement = document.getElementById("latch");
-    const LATCH_STATES = ["Off", "On", "Locked"];
+    const latchCheck = document.getElementById("latch-check");
+    const liveWrap = document.getElementById("live-wrap");
+    const liveElement = document.getElementById("live");
+    latchCheck.addEventListener("change", () => sendFlag(FLAGS.latch, latchCheck.checked));
+    liveElement.addEventListener("change", () => sendFlag(FLAGS.live, liveElement.checked));
 
     // Threshold and clip gains are set in 12 steps, one per key (Mode button + key).
     const STEPPED = [
@@ -1187,9 +1218,14 @@
       if (lineMono !== undefined) setValue(monoElement, lineMono ? "Mono" : "Stereo", now);
       latchMeta.hidden = looperLatch === undefined;
       if (looperLatch !== undefined) {
-        setValue(latchElement, LATCH_STATES[looperLatch] || "–", now);
+        if (flagIdle(FLAGS.latch, now)) latchCheck.checked = looperLatch > 0;
+        // The layer lock is only shown while it is on.
+        setValue(latchElement, looperLatch === 2 ? "Locked" : "", now);
         latchElement.classList.toggle("locked", looperLatch === 2);
       }
+      liveWrap.hidden = looperLiveInput === undefined;
+      if (looperLiveInput !== undefined && flagIdle(FLAGS.live, now))
+        liveElement.checked = looperLiveInput === 1;
       renderKnobs(now);
       for (const side of view) renderSide(side, now);
       requestAnimationFrame(frame);
