@@ -43,6 +43,12 @@ Bar mode). Holding both Mode buttons, the three-second save and single-Mode mode
 as before; only the tap of both Mode buttons, which otherwise changes both sides' modes, is
 taken over.
 
+**Live input during playback.** By default a playing loop replaces that side's live input; you
+hear the input with the loop only while overdubbing. Turn on Live Input During Loop Playback in
+the configuration page (or the Loop Monitor) to keep hearing the input at -6 dB, the overdub
+level, while loops play, without recording it. It applies to both sides and is saved with the
+other settings.
+
 Speed steps are pure ratios: 1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2 (two octaves down to an octave
 up, through fourths and fifths). A short F or G press moves one step from the current speed;
 holding it for half a second halves or doubles the speed instead. Speed returns to 1× at power-on.
@@ -64,13 +70,16 @@ each audio loop restart flashes the side purple (white in Cave mode).
 
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
-level and direction, the panel keys and controls, the looper latch (Off / On / Locked), and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
+level and direction, the panel keys and controls, the looper latch (Locked while the layer is locked), and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
 side's Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
-(varispeed / pitch / stretch, MIDI CC 87) and speed step buttons (the same steps as F/G, MIDI CC 86). Open it from disk in
+(varispeed / pitch / stretch, MIDI CC 87), speed step buttons (the same steps as F/G, MIDI CC 86)
+and the Looper latch and Live input in playback checkboxes (running state, saved like the other
+settings). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later; the
-looper latch state needs v4.30-duallooper.8 or later (hidden on older firmware).
+looper latch needs v4.30-duallooper.8 or later and live input v4.30-duallooper.9 or later
+(hidden on older firmware).
 
 ## Stereo pan
 
@@ -113,7 +122,7 @@ CC 10 = 64 is the center). A pan received over MIDI is also kept by the next Sav
 运行的共享实体旋钮参数，直接由 Wingie2 面板控制，不写入 flash。
 
 Save 会持久化 A3、Tuning、Pre/Post Clip Gain、三个 MIDI 通道路由、左右 Mode 与 Input
-Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
+Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、Looper 播放时的实时输入、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
 左右声道共用，9 个 ratio 按每 3 个一组分为 Voice 1/2/3；Ratio 模式下三个复音分别使用
 Voice 1/2/3 的比例，页面提供“复制 Voice 1 到 Voice 2、3”按钮将 Voice 1 的比例复制到另外两组 Voice。
 Factory Ratio 和导入配置都先改变运行状态，仍需 Save。Cave 频率范围为
@@ -151,7 +160,7 @@ not display or edit Mix, Decay, or Volume: those are runtime-only shared physica
 and are not written to flash.
 
 Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode, Input
-Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, the shared Ratio profile, and all three Cave banks
+Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, live input during playback, the shared Ratio profile, and all three Cave banks
 for each channel, including frequency and mute. The shared Ratio profile's nine ratios are grouped into Voices 1/2/3, three ratios per
 voice; in Ratio polyphonic mode, the three voices use the ratios of Voices 1/2/3 respectively, and the
 “Copy Voice 1 to Voices 2&3” button copies Voice 1's ratios into the other two voices. Factory Ratio
