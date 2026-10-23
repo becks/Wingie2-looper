@@ -27,6 +27,7 @@ class LooperDSP : public decorator_dsp {
   std::atomic<float> speed_[2] {{1}, {1}}, level_[2] {{1}, {1}}, retention_[2] {{0.8f}, {0.8f}}, cross_[2] {{0}, {0}};
   std::atomic<int> speedMode_[2] {{0}, {0}};
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
+  std::atomic<bool> liveInput_ {false};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -138,6 +139,8 @@ public:
   void setSpeedMode(int ch, int mode) {
     if (ch >= 0 && ch < 2 && mode >= 0 && mode < wingie_loop::kSpeedModeCount) speedMode_[ch].store(mode);
   }
+  // Both sides: keep the live input audible (-6 dB) while a loop plays.
+  void setLiveInput(bool on) { liveInput_.store(on); }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
@@ -202,6 +205,7 @@ private:
     float speed[2], level[2], retention[2], cross[2];
     bool reverse[2];
     int mode[2];
+    const bool liveInput = liveInput_.load();
     for (int ch=0; ch<2; ++ch) {
       int command = command_[ch].exchange(-1);
       if (command >= 0) loop_[ch].command(command);
@@ -210,6 +214,7 @@ private:
       mode[ch]=speedMode_[ch].load();
       level[ch]=level_[ch].load();
       retention[ch]=retention_[ch].load(); cross[ch]=cross_[ch].load();
+      loop_[ch].setLiveInput(liveInput);
     }
     bool active[2] = {loop_[0].active(), loop_[1].active()};
     if (!active[0] && !active[1]) {

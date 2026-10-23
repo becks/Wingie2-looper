@@ -78,6 +78,8 @@ private:
     overdubCount_ = 0;
   }
   float retention_ = 0.8f;
+  // Live input mixed into playback (0 = the loop replaces it); overdub always uses -6 dB.
+  float liveInput_ = 0;
   // Decoded neighbours of the current frame; they change only every ~9 samples.
   static constexpr size_t kNoCache = ~size_t(0);
   size_t cachedIndex_ = kNoCache;
@@ -164,6 +166,7 @@ private:
     size_t position = position_, cached = cachedIndex_;
     float fraction = fraction_, smooth = smooth_, a = cachedA_, b = cachedB_;
     if (overdub) retention_ = retention;
+    const float inputGain = overdub ? 0.5f : liveInput_;
     // Grains need room for two of them inside the loop.
     const float width = length / 2 < kGrainFrames ? length / 2 : kGrainFrames;
     const bool grains = kGrains && width >= 4;
@@ -259,9 +262,9 @@ private:
         grain = next;
       }
       smooth += 0.02f * (level - smooth);
-      // During overdub, let the player hear the new material immediately as
-      // well as the existing loop. -6 dB keeps their combined drive controlled.
-      output[k] = overdub ? sample * smooth + input[k] * 0.5f : sample * smooth;
+      // During overdub (and playback with live input on), let the player hear the
+      // input as well as the existing loop. -6 dB keeps their combined drive controlled.
+      output[k] = sample * smooth + input[k] * inputGain;
     }
     position_ = position;
     fraction_ = fraction;
@@ -314,6 +317,8 @@ public:
   bool active() const { return capacity_ && state_ != 0; }
   static constexpr unsigned rateDivision() { return kRateDivision; }
   // 0 bypass, 1 replace-record, 2 play, 3 overdub, 4 clear.
+  // Audio task only: hear the live input at -6 dB during playback too.
+  void setLiveInput(bool on) { liveInput_ = on ? 0.5f : 0; }
   void command(int value) {
     if (!capacity_) return;
     cachedIndex_ = kNoCache;

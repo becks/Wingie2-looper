@@ -44,6 +44,16 @@ int main() {
   float monitoredOut = monitored.process(.4f, 1, 1, 1, 0);
   assert(monitoredOut > .19f && monitoredOut < .21f);
 
+  // Playback replaces the live input unless live input is on (-6 dB, like overdub).
+  monitored.command(2);
+  for(int i=0;i<64*9;++i) monitored.process(0, 1, 1, 1, 0);
+  float replaced = monitored.process(.4f, 1, 1, 1, 0);
+  monitored.setLiveInput(true);
+  float mixed = monitored.process(.4f, 1, 1, 1, 0);
+  assert(std::abs(mixed - replaced - .2f) < .02f);
+  monitored.setLiveInput(false);
+  assert(std::abs(monitored.process(.4f, 1, 1, 1, 0) - replaced) < .02f);
+
   // Reverse only changes playback traversal; the stored loop survives.
   for(int i=0;i<4000;++i) {
     float x = companded.processReverse(0, 1.0f, 1, 1, 0);

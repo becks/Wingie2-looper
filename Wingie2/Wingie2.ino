@@ -165,6 +165,8 @@ bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
 bool looper_latch = false, looperLatched = false, bothModeGesture = false;
 bool looperLatchFlashOn = false;
 unsigned long looperLatchFlashTimer = 0;
+// Live input mixed in at -6 dB while a loop plays (otherwise the loop replaces it).
+bool looper_live_input = false;
 bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
@@ -492,6 +494,10 @@ void persist_bool_setting_now(const char *key, bool value, int dirtyIndex) {
 
 void persist_line_input_mono_now() {
   persist_bool_setting_now("line_input_mono", line_input_mono, kDirtyLineInputMono);
+}
+
+void apply_looper_live_input() {
+  dsp.setLooperLiveInput(looper_live_input);
 }
 
 void persist_looper_latch_now() {

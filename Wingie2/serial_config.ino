@@ -370,6 +370,19 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     canonical = looper_latch ? 1.0f : 0.0f;
     return true;
   }
+  if (strcmp(request.name, "looper_live_input") == 0) {
+    int enabled = wingie_config::kLooperLiveInputMin;
+    if (!quantizeIntegerParameter(request.value, wingie_config::kLooperLiveInputMin,
+                                  wingie_config::kLooperLiveInputMax, enabled))
+      return false;
+    if (looper_live_input != static_cast<bool>(enabled)) {
+      looper_live_input = enabled;
+      apply_looper_live_input();
+      dirty[kDirtyLooperLiveInput] = true;
+    }
+    canonical = looper_live_input ? 1.0f : 0.0f;
+    return true;
+  }
   return false;
 }
 
@@ -401,6 +414,7 @@ void sendSettings(uint32_t id) {
   shared.mpeEnabled = mpe_enabled;
   shared.lineInputMono = line_input_mono;
   shared.looperLatch = looper_latch;
+  shared.looperLiveInput = looper_live_input;
 
   wingie_serial::JsonResponse response;
   wingie_serial::encodeSettings(response, id, source, generalSettingsAreDirty(),
@@ -495,6 +509,7 @@ void sendLoopStatus(uint32_t id) {
   snapshot.ms = now;
   snapshot.lineInputMono = line_input_mono;
   snapshot.looperLatch = looper_latch ? (looperLatched ? 2 : 1) : 0;
+  snapshot.looperLiveInput = looper_live_input;
   snapshot.threshold[0] = left_thresh;
   snapshot.threshold[1] = right_thresh;
   snapshot.preClipGain = pre_clip_gain;
