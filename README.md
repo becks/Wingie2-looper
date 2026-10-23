@@ -69,7 +69,8 @@ side's Pan slider (see below), SOS slider (sound on sound: the share of the loop
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
 (varispeed / pitch / stretch, MIDI CC 87) and speed step buttons (the same steps as F/G, MIDI CC 86). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial
-monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later.
+monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later; the
+looper latch state needs v4.30-duallooper.8 or later (hidden on older firmware).
 
 ## Stereo pan
 

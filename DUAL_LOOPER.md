@@ -107,8 +107,10 @@ keys and controls, the looper latch (Off / On / Locked, `latch` 0–2 in `loop_s
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
 (`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
-later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`); the rest works from
-v4.30-duallooper.5.
+later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`), and the looper
+latch state v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`); the rest works
+from v4.30-duallooper.5. The looper latch itself (boot B+B, the configuration page field) is new
+in v4.30-duallooper.8.
 
 ## CPU headroom
 
