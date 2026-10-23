@@ -357,6 +357,19 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     canonical = line_input_mono ? 1.0f : 0.0f;
     return true;
   }
+  if (strcmp(request.name, "looper_latch") == 0) {
+    int enabled = wingie_config::kLooperLatchMin;
+    if (!quantizeIntegerParameter(request.value, wingie_config::kLooperLatchMin,
+                                  wingie_config::kLooperLatchMax, enabled))
+      return false;
+    // The control task unlocks a latched layer when this turns off.
+    if (looper_latch != static_cast<bool>(enabled)) {
+      looper_latch = enabled;
+      dirty[kDirtyLooperLatch] = true;
+    }
+    canonical = looper_latch ? 1.0f : 0.0f;
+    return true;
+  }
   return false;
 }
 
@@ -387,6 +400,7 @@ void sendSettings(uint32_t id) {
   shared.midiBoth = midi_ch_both;
   shared.mpeEnabled = mpe_enabled;
   shared.lineInputMono = line_input_mono;
+  shared.looperLatch = looper_latch;
 
   wingie_serial::JsonResponse response;
   wingie_serial::encodeSettings(response, id, source, generalSettingsAreDirty(),
@@ -480,6 +494,7 @@ void sendLoopStatus(uint32_t id) {
   const uint32_t now = millis();
   snapshot.ms = now;
   snapshot.lineInputMono = line_input_mono;
+  snapshot.looperLatch = looper_latch ? (looperLatched ? 2 : 1) : 0;
   snapshot.threshold[0] = left_thresh;
   snapshot.threshold[1] = right_thresh;
   snapshot.preClipGain = pre_clip_gain;

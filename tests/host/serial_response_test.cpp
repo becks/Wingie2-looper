@@ -98,6 +98,7 @@ static void testSettings() {
   shared.midiBoth = 3;
   shared.mpeEnabled = false;
   shared.lineInputMono = false;
+  shared.looperLatch = true;
 
   JsonResponse response;
   encodeSettings(response, 2, true, true, true, left, right, shared);
@@ -106,7 +107,7 @@ static void testSettings() {
       "\"dirty_all\":true,\"left\":{\"mode\":1,\"mix\":0.5000,\"decay\":2.5000,\"volume\":0.7500,\"threshold\":0.4125,\"pan\":0.0000},"
       "\"right\":{\"mode\":2,\"mix\":0.2500,\"decay\":1.0000,\"volume\":0.5000,\"threshold\":0.9900,\"pan\":0.7500},"
       "\"shared\":{\"a3_hz\":440.00,\"tuning\":-1,\"pre_clip_gain\":0.2475,\"post_clip_gain\":0.8250,"
-      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false},"
+      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false,\"looper_latch\":true},"
       "\"limits\":{\"mode\":[0,4,1],"
       "\"threshold\":[0.0825,0.99,0.0825],"
       "\"pan\":[0,1,0.01],"
@@ -115,14 +116,15 @@ static void testSettings() {
       "\"pre_clip_gain\":[0.0825,0.99,0.0825],"
       "\"post_clip_gain\":[0.385,0.99,0.055],"
       "\"midi_left\":[1,16,1],\"midi_right\":[1,16,1],\"midi_both\":[1,16,1],"
-      "\"mpe_enabled\":[0,1,1],\"line_input_mono\":[0,1,1]}}");
+      "\"mpe_enabled\":[0,1,1],\"line_input_mono\":[0,1,1],\"looper_latch\":[0,1,1]}}");
 
   shared.mpeEnabled = true;
+  shared.looperLatch = false;
   JsonResponse micResponse;
   encodeSettings(micResponse, 3, false, false, false, left, right, shared);
   assert(strstr(micResponse.data, "\"source\":\"mic\",\"dirty\":false") != nullptr);
   assert(strstr(micResponse.data, "\"dirty_all\":false") != nullptr);
-  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false},\"limits\":{") != nullptr);
+  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false,\"looper_latch\":false},\"limits\":{") != nullptr);
 }
 
 static void testRatioProfile() {
@@ -275,6 +277,7 @@ static void testLoopMonitor() {
   status.ms = 1234;
   status.frameRate = 4900;
   status.lineInputMono = true;
+  status.looperLatch = 2;
   status.threshold[0] = 0.0825f;
   status.threshold[1] = 0.99f;
   status.preClipGain = 0.2475f;
@@ -292,7 +295,7 @@ static void testLoopMonitor() {
   JsonResponse statusResponse;
   encodeLoopStatus(statusResponse, 5, status);
   checkResponse(statusResponse,
-      "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,"
+      "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,\"latch\":2,"
       "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
       "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800,2],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500]},"
       "{\"a\":[0,0,0,0,2.000,0.000,0,0.000,0],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000]}],"

@@ -204,10 +204,12 @@ class WingieConfigHtmlTest(unittest.TestCase):
             "midi_both",
             "mpe_enabled",
             "line_input_mono",
+            "looper_latch",
         ):
             self.assertIn(f'param:shared:{name}', self.source)
         self.assertIn("wg-mpe-enabled", self.source)
         self.assertIn("wg-line-input-mono", self.source)
+        self.assertIn("wg-looper-latch", self.source)
         self.assertIn("config_schema) !== 6", self.source)
         for stale_item in ("Source", "Note", "Fundamental", "Active Cave", "mix", "decay", "volume"):
             self.assertNotIn(stale_item, self.source)
@@ -322,7 +324,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn("grid-template-columns: repeat(6, minmax(0, 1fr))", self.source)
         self.assertEqual(self.source.count('class="wg-field wg-field-half"'), 4)
         self.assertEqual(self.source.count('class="wg-field wg-field-third"'), 3)
-        self.assertEqual(self.source.count('class="wg-field wg-field-full"'), 2)
+        self.assertEqual(self.source.count('class="wg-field wg-field-full"'), 3)
         self.assertIn("@media (max-width: 760px)", self.source)
         self.assertIn('data-mobile-side="left"', self.source)
         self.assertIn("overflow-x: auto", self.source)
@@ -518,6 +520,8 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn("kDirtyMpeEnabled", self.storage_source)
         self.assertIn('"line_input_mono"', self.storage_source)
         self.assertIn("kDirtyLineInputMono", self.storage_source)
+        self.assertIn('"looper_latch"', self.storage_source)
+        self.assertIn("kDirtyLooperLatch", self.storage_source)
         self.assertIn("store.putBool", self.storage_source)
         self.assertIn('"mpe_enabled\\":%s', self.response_source)
         self.assertIn('"line_input_mono\\":%s', self.response_source)
@@ -561,6 +565,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn('"midi_left\\":[%g,%g,1]', self.response_source)
         self.assertIn('"mpe_enabled\\":[%g,%g,1]', self.response_source)
         self.assertIn('"line_input_mono\\":[%g,%g,1]', self.response_source)
+        self.assertIn('"looper_latch\\":[%g,%g,1]', self.response_source)
         # 量化范围收拢为单一常量源，serial_config.ino 与编码端共用
         self.assertIn("kModeMin", self.firmware_source)
         self.assertIn("kModeMax", self.firmware_source)

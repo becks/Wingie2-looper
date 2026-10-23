@@ -15,6 +15,12 @@ to playback, D enables overdub, D# returns to bypass while preserving the loop, 
 holding E for one second clears the loop. A looper gesture suppresses the normal mode
 change and save actions associated with the Mode buttons. Holding both Mode buttons
 for three seconds without pressing a note continues to save preferences normally.
+With the looper latch on (toggled by holding both B keys at power-on, red for on and white
+for off, or by Looper Latch in the configuration page; saved), a tap of both Mode buttons
+locks the looper layer instead of changing both sides' modes, and another tap unlocks it.
+While locked, the keys give the commands below without holding Mode, including the E, F, F#,
+G and A holds, and both LEDs flash red for 120 ms every 1.2 s (white in Bar mode). Holding a
+single Mode button still sets threshold or gain, and its tap still changes that side's mode.
 While holding both Mode buttons, F and G move that side's loop speed one step down or
 up through pure-ratio fourths, fifths and octaves (1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2);
 holding F or G for half a second jumps an octave from the current speed instead (within
@@ -97,7 +103,7 @@ synchronization, audio persistence, or automatic pitch modulation.
 
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
-keys and controls, and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
+keys and controls, the looper latch (Off / On / Locked, `latch` 0–2 in `loop_status`), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
 (`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or

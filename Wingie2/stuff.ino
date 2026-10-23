@@ -31,6 +31,7 @@ static const GeneralSettingEntry kGeneralSettings[kDirtyCount] = {
   {"line_input_mono", kSettingBool, kDirtyLineInputMono, "%s is saved, value is %d.\n", &line_input_mono},
   {"left_pan", kSettingFloat, kDirtyLeftPan, "%s is saved, value is %.4f\n", &pan[0]},
   {"right_pan", kSettingFloat, kDirtyRightPan, "%s is saved, value is %.4f\n", &pan[1]},
+  {"looper_latch", kSettingBool, kDirtyLooperLatch, "%s is saved, value is %d.\n", &looper_latch},
 };
 
 bool save_general_preferences(Preferences &store) {

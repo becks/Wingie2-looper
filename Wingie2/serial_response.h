@@ -64,6 +64,7 @@ struct SharedSettings {
   int midiBoth;
   bool mpeEnabled;
   bool lineInputMono;
+  bool looperLatch;  // tap both Mode buttons to lock the looper layer
 };
 
 // status 响应快照
@@ -125,6 +126,7 @@ struct LoopStatusSnapshot {
   uint32_t ms;
   uint32_t frameRate;
   bool lineInputMono;  // toggled by holding both C keys at boot
+  int looperLatch;     // 0 off, 1 on, 2 on with the looper layer locked
   float threshold[2];  // sequencer threshold per side
   float preClipGain;
   float postClipGain;
@@ -198,7 +200,8 @@ inline void appendSettingsLimits(JsonResponse &response) {
       "\"midi_right\":[%g,%g,1],"
       "\"midi_both\":[%g,%g,1],"
       "\"mpe_enabled\":[%g,%g,1],"
-      "\"line_input_mono\":[%g,%g,1]}",
+      "\"line_input_mono\":[%g,%g,1],"
+      "\"looper_latch\":[%g,%g,1]}",
       static_cast<float>(wingie_config::kModeMin), static_cast<float>(wingie_config::kModeMax),
       wingie_config::kThresholdMin, wingie_config::kThresholdMax, wingie_config::kThresholdStep,
       wingie_config::kPanMin, wingie_config::kPanMax, wingie_config::kPanStep,
@@ -210,7 +213,8 @@ inline void appendSettingsLimits(JsonResponse &response) {
       static_cast<float>(wingie_config::kMidiChannelMin), static_cast<float>(wingie_config::kMidiChannelMax),
       static_cast<float>(wingie_config::kMidiChannelMin), static_cast<float>(wingie_config::kMidiChannelMax),
       static_cast<float>(wingie_config::kMpeEnabledMin), static_cast<float>(wingie_config::kMpeEnabledMax),
-      static_cast<float>(wingie_config::kLineInputMonoMin), static_cast<float>(wingie_config::kLineInputMonoMax));
+      static_cast<float>(wingie_config::kLineInputMonoMin), static_cast<float>(wingie_config::kLineInputMonoMax),
+      static_cast<float>(wingie_config::kLooperLatchMin), static_cast<float>(wingie_config::kLooperLatchMax));
 }
 
 inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmware) {
@@ -223,7 +227,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
                   static_cast<unsigned>(kMaxFrameBytes));
 }
 
-// dirty 只反映 general settings（midi/调律/增益/阈值/模式/MPE/线路单声道）；
+// dirty 只反映 general settings（midi/调律/增益/阈值/模式/MPE/线路单声道/looper latch）；
 // dirtyAll 反映全量配置（另含 ratio 与 cave），供只读 get_settings 的消费方判断是否真正全部落盘。
 inline void encodeSettings(JsonResponse &response, uint32_t id, bool sourceLine, bool dirty,
                            bool dirtyAll,
@@ -239,12 +243,13 @@ inline void encodeSettings(JsonResponse &response, uint32_t id, bool sourceLine,
   response.append(",\"shared\":{\"a3_hz\":%.2f,\"tuning\":%d,"
                   "\"pre_clip_gain\":%.4f,\"post_clip_gain\":%.4f,"
                   "\"midi\":{\"left\":%d,\"right\":%d,\"both\":%d},"
-                  "\"mpe_enabled\":%s,\"line_input_mono\":%s}",
+                  "\"mpe_enabled\":%s,\"line_input_mono\":%s,\"looper_latch\":%s}",
                   shared.a3Hz, shared.tuning,
                   shared.preClipGain, shared.postClipGain,
                   shared.midiLeft, shared.midiRight, shared.midiBoth,
                   shared.mpeEnabled ? "true" : "false",
-                  shared.lineInputMono ? "true" : "false");
+                  shared.lineInputMono ? "true" : "false",
+                  shared.looperLatch ? "true" : "false");
   appendSettingsLimits(response);
   response.append("}");
 }
@@ -331,10 +336,11 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
-                  "\"ms\":%lu,\"fps\":%lu,\"mono\":%d,"
+                  "\"ms\":%lu,\"fps\":%lu,\"mono\":%d,\"latch\":%d,"
                   "\"t\":[%.4f,%.4f],\"g\":[%.4f,%.4f],\"sides\":[",
                   static_cast<unsigned long>(id), static_cast<unsigned long>(snapshot.ms),
                   static_cast<unsigned long>(snapshot.frameRate), snapshot.lineInputMono ? 1 : 0,
+                  snapshot.looperLatch,
                   snapshot.threshold[0], snapshot.threshold[1], snapshot.preClipGain,
                   snapshot.postClipGain);
   for (int ch = 0; ch < 2; ch++) {

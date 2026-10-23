@@ -160,6 +160,11 @@ int note[2], currentNote[2] = {36, 36}, octPrev[2], oct[2], allKeys[2] = {0, 0},
 volatile int Mode[2] = {POLY_MODE, POLY_MODE};
 bool modeButtonState[2], modeButtonPressed[2], duck_env_triggered[2] = {false, false};
 bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
+// Looper latch (boot B+B or the config page): tapping both Mode buttons locks the
+// looper layer instead of changing both sides' modes; another tap unlocks it.
+bool looper_latch = false, looperLatched = false, bothModeGesture = false;
+bool looperLatchFlashOn = false;
+unsigned long looperLatchFlashTimer = 0;
 bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
@@ -306,6 +311,8 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define SAVE_DELAY 3000
 #define LOOPER_CLEAR_HOLD_MS 1000
 #define LOOPER_OCTAVE_HOLD_MS 500
+#define LOOPER_LATCH_FLASH_INTERVAL 1200  // latched layer: a short flash this often
+#define LOOPER_LATCH_FLASH_MS 120
 #define LOOPER_FULL_BLINK_STEPS 7  // six 125 ms colour steps, then restore the mode colour
 #define LOOPER_FULL_BLINK_MS 125
 #define LOOPER_WRAP_FLASH_MS 120
@@ -469,21 +476,26 @@ void set_pan(byte ch, float value) {
   dirty[kDirtyLeftPan + ch] = true;
 }
 
-void persist_line_input_mono_now() {
+// Writes one bool setting at once (boot key combos), leaving it dirty on failure.
+void persist_bool_setting_now(const char *key, bool value, int dirtyIndex) {
   if (!prefs.begin("settings", RW_MODE)) {
-    dirty[kDirtyLineInputMono] = true;
-    Serial.println("Failed to save line_input_mono");
+    dirty[dirtyIndex] = true;
+    Serial.printf("Failed to save %s\n", key);
     return;
   }
-  const bool saved = prefs.putBool("line_input_mono", line_input_mono);
+  const bool saved = prefs.putBool(key, value);
   prefs.end();
-  if (saved) {
-    dirty[kDirtyLineInputMono] = false;
-    Serial.printf("line_input_mono is saved, value is %d.\n", line_input_mono);
-  } else {
-    dirty[kDirtyLineInputMono] = true;
-    Serial.println("Failed to save line_input_mono");
-  }
+  dirty[dirtyIndex] = !saved;
+  if (saved) Serial.printf("%s is saved, value is %d.\n", key, value);
+  else Serial.printf("Failed to save %s\n", key);
+}
+
+void persist_line_input_mono_now() {
+  persist_bool_setting_now("line_input_mono", line_input_mono, kDirtyLineInputMono);
+}
+
+void persist_looper_latch_now() {
+  persist_bool_setting_now("looper_latch", looper_latch, kDirtyLooperLatch);
 }
 
 // 单一入口：启用/禁用 alternate tuning 的完整状态机

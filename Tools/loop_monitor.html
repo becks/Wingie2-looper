@@ -91,6 +91,7 @@
     .side-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
     .side-head h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: var(--muted); }
+    #latch.locked { color: var(--rec); }
     /* Pan, SOS and the speed steps are the controls the page writes (set_param); everything else is read-only. */
     .control { display: inline-flex; align-items: center; gap: 8px; }
     .control[hidden] { display: none; }
@@ -215,6 +216,7 @@
     <header>
       <h1>Wingie2 Loop Monitor</h1>
       <span class="meta">Line input <b id="mono">–</b></span>
+      <span class="meta" id="latch-meta" hidden>Looper latch <b id="latch">–</b></span>
       <div class="connection">
         <span class="dot" id="dot"></span>
         <span id="status">Disconnected</span>
@@ -400,6 +402,7 @@
     }));
     let fps = 4900;
     let lineMono;
+    let looperLatch;  // 0 off, 1 on, 2 on with the looper layer locked; undefined on older firmware
     let steps = null;
     let speedStepsSupported = false;
     let speedModesSupported = false;
@@ -737,6 +740,7 @@
         const now = performance.now();
         fps = status.fps || fps;
         lineMono = status.mono;
+        looperLatch = status.latch;
         if (status.lv) {
           io.monoActive = !!status.mono_active;
           io.source = status.src || "";
@@ -1022,6 +1026,9 @@
     }
 
     const monoElement = document.getElementById("mono");
+    const latchMeta = document.getElementById("latch-meta");
+    const latchElement = document.getElementById("latch");
+    const LATCH_STATES = ["Off", "On", "Locked"];
 
     // Threshold and clip gains are set in 12 steps, one per key (Mode button + key).
     const STEPPED = [
@@ -1178,6 +1185,11 @@
       renderIo(now);
       renderSteps(now);
       if (lineMono !== undefined) setValue(monoElement, lineMono ? "Mono" : "Stereo", now);
+      latchMeta.hidden = looperLatch === undefined;
+      if (looperLatch !== undefined) {
+        setValue(latchElement, LATCH_STATES[looperLatch] || "–", now);
+        latchElement.classList.toggle("locked", looperLatch === 2);
+      }
       renderKnobs(now);
       for (const side of view) renderSide(side, now);
       requestAnimationFrame(frame);
