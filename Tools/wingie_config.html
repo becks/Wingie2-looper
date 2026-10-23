@@ -752,6 +752,7 @@
           <div class="wg-field wg-field-full"><label for="wg-mpe-enabled" data-i18n-zh="MPE 模式" data-i18n-en="MPE Mode"></label><select id="wg-mpe-enabled" class="wg-select" data-value-key="param:shared:mpe_enabled" disabled><option value="0" data-i18n-zh="关闭：三通道分立路由" data-i18n-en="Off: three-channel routing"></option><option value="1" data-i18n-zh="开启：标准 Lower Zone（Ch1 + Ch2–16，左右交替）" data-i18n-en="On: standard Lower Zone (Ch1 + Ch2-16, L/R alternating)"></option></select></div>
           <div class="wg-field wg-field-full"><label for="wg-line-input-mono" data-i18n-zh="线路输入" data-i18n-en="Line Input"></label><select id="wg-line-input-mono" class="wg-select" data-value-key="param:shared:line_input_mono" disabled><option value="0" data-i18n-zh="立体声：左右各自进入对应共鸣器" data-i18n-en="Stereo: each side feeds its resonator"></option><option value="1" data-i18n-zh="单声道：L+R 混合后进入左右共鸣器（仅线路；麦克风仍立体声）" data-i18n-en="Mono: L+R summed into both resonators (line only; mic stays stereo)"></option></select></div>
           <div class="wg-field wg-field-full"><label for="wg-looper-latch" data-i18n-zh="Looper 锁定" data-i18n-en="Looper Latch"></label><select id="wg-looper-latch" class="wg-select" data-value-key="param:shared:looper_latch" disabled><option value="0" data-i18n-zh="关闭：按住两个 Mode 键使用 looper 层" data-i18n-en="Off: hold both Mode buttons for the looper layer"></option><option value="1" data-i18n-zh="开启：轻按两个 Mode 键锁定/解锁 looper 层" data-i18n-en="On: tap both Mode buttons to lock or unlock the looper layer"></option></select></div>
+          <div class="wg-field wg-field-full"><label for="wg-looper-live-input" data-i18n-zh="Looper 播放时的实时输入" data-i18n-en="Live Input During Loop Playback"></label><select id="wg-looper-live-input" class="wg-select" data-value-key="param:shared:looper_live_input" disabled><option value="0" data-i18n-zh="关闭：播放时 loop 取代实时输入" data-i18n-en="Off: the playing loop replaces the live input"></option><option value="1" data-i18n-zh="开启：实时输入以 -6 dB 与 loop 一起播放" data-i18n-en="On: the live input plays along with the loop at -6 dB"></option></select></div>
         </div>
       </section>
 
@@ -823,7 +824,8 @@
         "param:shared:midi_both": {target: "shared", name: "midi_both", path: ["shared", "midi", "both"], min: 1, max: 16, step: 1},
         "param:shared:mpe_enabled": {target: "shared", name: "mpe_enabled", path: ["shared", "mpe_enabled"], min: 0, max: 1, step: 1, immediate: true},
         "param:shared:line_input_mono": {target: "shared", name: "line_input_mono", path: ["shared", "line_input_mono"], min: 0, max: 1, step: 1, immediate: true},
-        "param:shared:looper_latch": {target: "shared", name: "looper_latch", path: ["shared", "looper_latch"], min: 0, max: 1, step: 1, immediate: true}
+        "param:shared:looper_latch": {target: "shared", name: "looper_latch", path: ["shared", "looper_latch"], min: 0, max: 1, step: 1, immediate: true},
+        "param:shared:looper_live_input": {target: "shared", name: "looper_live_input", path: ["shared", "looper_live_input"], min: 0, max: 1, step: 1, immediate: true}
       };
 
       const state = {

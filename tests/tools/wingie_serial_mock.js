@@ -30,7 +30,8 @@
       midi: {left: 13, right: 14, both: 15},
       mpe_enabled: false,
       line_input_mono: false,
-      looper_latch: false
+      looper_latch: false,
+      looper_live_input: false
     }
   };
 
@@ -85,7 +86,8 @@
       midi_left: [1, 16, 1, true], midi_right: [1, 16, 1, true], midi_both: [1, 16, 1, true],
       mpe_enabled: [0, 1, 1, true],
       line_input_mono: [0, 1, 1, true],
-      looper_latch: [0, 1, 1, true]
+      looper_latch: [0, 1, 1, true],
+      looper_live_input: [0, 1, 1, true]
     }
   };
 

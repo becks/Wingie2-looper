@@ -93,7 +93,9 @@ the heads at the speed; in stretch mode the play position moves at the speed and
 at 1×. The grains are computed every second audio sample and interpolated, since the
 loop holds nothing above ~2.4 kHz. During overdub, the live input is mixed at -6 dB with the existing loop
 so new material is heard immediately; it is averaged and written once per low-rate
-buffer position.
+buffer position. In playback the loop replaces the live input, unless `looper_live_input`
+(shared, 0/1, configuration page or Loop Monitor; saved, off by default) is on: then the input
+is mixed in at the same -6 dB without being recorded, on both sides.
 
 Limitations: continuous speed and level (beyond the panel and Loop Monitor steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
@@ -103,14 +105,16 @@ synchronization, audio persistence, or automatic pitch modulation.
 
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
-keys and controls, the looper latch (Off / On / Locked, `latch` 0–2 in `loop_status`), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
+keys and controls, the looper latch (`latch` 0–2 in `loop_status`: off, on, on and locked), live input during playback (`live` 0/1), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
-(`set_param` `speed_step`, 0–7), written with `set_param`. Open it from disk in desktop Chrome or Edge.
+(`set_param` `speed_step`, 0–7), and the Looper latch and Live input in playback checkboxes
+(shared `looper_latch` and `looper_live_input`), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
 later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`), and the looper
-latch state v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`); the rest works
-from v4.30-duallooper.5. The looper latch itself (boot B+B, the configuration page field) is new
-in v4.30-duallooper.8.
+latch v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`) and live input
+v4.30-duallooper.9 or later (hidden without `live`); the rest works from v4.30-duallooper.5.
+The looper latch itself (boot B+B, the configuration page field) is new in v4.30-duallooper.8,
+live input during playback in v4.30-duallooper.9.
 
 ## CPU headroom
 

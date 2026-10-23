@@ -244,6 +244,7 @@ void control(void *pvParameters) {
     prefs.putBool("mpe_enabled", false);
     prefs.putBool("line_input_mono", false);
     prefs.putBool("looper_latch", false);
+    prefs.putBool("looper_live_input", false);
     prefs.putFloat("left_pan", wingie_config::kDefaultPan[0]);
     prefs.putFloat("right_pan", wingie_config::kDefaultPan[1]);
     prefs.putBool("unq_caves_store", false);
@@ -285,6 +286,9 @@ void control(void *pvParameters) {
   Serial.printf("line_input_mono = %d, active = %d\n", line_input_mono, line_input_mono_active);
   looper_latch = prefs.getBool("looper_latch", false);
   Serial.printf("looper_latch = %d\n", looper_latch);
+  looper_live_input = prefs.getBool("looper_live_input", false);
+  apply_looper_live_input();
+  Serial.printf("looper_live_input = %d\n", looper_live_input);
   float a3_freq_offset = prefs.getFloat("a3_freq_offset", 0);
   a3_freq = 440. + a3_freq_offset;
   dsp.setParamValue("a3_freq", a3_freq);
