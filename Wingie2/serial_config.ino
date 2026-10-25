@@ -2,8 +2,10 @@
 #include "serial_response.h"
 
 // Web 协议 mode 范围与固件模式枚举必须一致，防 get_settings limits 漂移
-static_assert(POLY_MODE == wingie_config::kModeMin && RATIO_MODE == wingie_config::kModeMax,
+static_assert(POLY_MODE == wingie_config::kModeMin && LAST_MODE == wingie_config::kModeMax,
               "Web protocol mode limits drifted from firmware mode enum");
+static_assert(wingie_config::kModeCycleMax == wingie_modes::kAllModesMask,
+              "mode_cycle limits must cover every mode");
 
 void apply_ratio_profile_to_dsp();
 bool save_all_preferences();
@@ -370,6 +372,18 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     canonical = looper_latch ? 1.0f : 0.0f;
     return true;
   }
+  if (strcmp(request.name, "mode_cycle") == 0) {
+    int mask = wingie_config::kModeCycleMin;
+    if (!quantizeIntegerParameter(request.value, wingie_config::kModeCycleMin,
+                                  wingie_config::kModeCycleMax, mask))
+      return false;
+    if (mode_cycle != static_cast<uint32_t>(mask)) {
+      mode_cycle = mask;
+      dirty[kDirtyModeCycle] = true;
+    }
+    canonical = mode_cycle;
+    return true;
+  }
   if (strcmp(request.name, "looper_live_input") == 0) {
     int enabled = wingie_config::kLooperLiveInputMin;
     if (!quantizeIntegerParameter(request.value, wingie_config::kLooperLiveInputMin,
@@ -415,6 +429,7 @@ void sendSettings(uint32_t id) {
   shared.lineInputMono = line_input_mono;
   shared.looperLatch = looper_latch;
   shared.looperLiveInput = looper_live_input;
+  shared.modeCycle = static_cast<int>(mode_cycle);
 
   wingie_serial::JsonResponse response;
   wingie_serial::encodeSettings(response, id, source, generalSettingsAreDirty(),
@@ -743,6 +758,8 @@ void apply_ratio_profile_to_dsp() {
   for (byte ch = 0; ch < 2; ch++) {
     if (Mode[ch] == RATIO_MODE) {
       apply_all_ratio_voice_pitch(ch);
+    } else if (Mode[ch] == CUSTOM_MODE) {
+      apply_pitched_mode_channel(ch, currentNote[ch]);
     }
   }
 }

@@ -196,7 +196,7 @@ void reset_mpe_assignments(byte ch) {
 
 void refresh_mono_pitch(byte ch) {
   currentPitchBend[ch] = mono_total_bend(ch);
-  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+  if (wingie_modes::isPitchedMono(Mode[ch])) {
     apply_pitched_mode_channel(ch, currentNote[ch]);
   }
 }
@@ -271,7 +271,7 @@ bool handle_mpe_note_on(byte channel, byte pitch) {
       if (Mode[ch] == RATIO_MODE) unmute_ratio_voice(ch, voice);
       apply_voice_pitch(ch, voice);
     }
-  } else if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+  } else if (wingie_modes::isPitchedMono(Mode[ch])) {
     mpeMonoState[ch].active = true;
     mpeMonoState[ch].channel = channel;
     mpeMonoState[ch].note = pitch;

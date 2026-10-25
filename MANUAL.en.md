@@ -74,7 +74,7 @@ When both channels share the same octave setting, the right channel sounds one o
 
 ## 4. Modes
 
-Wingie2 has **five** modes, cycled by pressing the Mode button. The current mode is shown by the LED.
+Wingie2 has **five** original modes plus fourteen [pitched resonator modes](#additional-resonator-modes), cycled by pressing the Mode button. The current mode is shown by the LED.
 
 | Mode | Polyphony | Note keyboard | Octave switch response | LED |
 |------|-----------|---------------|------------------------|-----|
@@ -84,7 +84,7 @@ Wingie2 has **five** modes, cycled by pressing the Mode button. The current mode
 | **Cave** (purple) | 9 resonators (Low/Mid/High bank switch) | See [Chapter 5](#5-custom-caves) | Switches between three caves | Purple |
 | **Ratio** (white/yellow alternating) | 3-voice | Buttons cycle through each voice; resonator frequency = fundamental × ratio | Affects the next note played | white/yellow alternating |
 
-Global tuning affects all five modes: Poly, String, Bar, Cave, and Ratio. (Factory default A3 (69) = 440 Hz.) For global tuning, see [Chapter 13](#13-global-settings-midi-cc-table).
+Global tuning affects every mode: Poly, String, Bar, Cave, Ratio and the additional resonator modes. (Factory default A3 (69) = 440 Hz.) For global tuning, see [Chapter 13](#13-global-settings-midi-cc-table).
 
 ### Ratio Mode
 
@@ -96,9 +96,35 @@ Ratio Mode is the fifth mode, new in v4. Unlike Poly/String/Bar, which stack by 
 
 There are three ways to enter Ratio Mode:
 
-1. **Panel button**: After Poly → String → Bar → Cave, press once more to enter Ratio Mode (the 5th press).
+1. **Panel button**: After Poly → String → Bar → Cave, press once more to enter Ratio Mode (the 5th press). Further presses step through the [additional resonator modes](#additional-resonator-modes) when they are in the cycle.
 2. **MIDI**: CC 0 value 103–127.
 3. **USB Web Configuration**: Select "Ratio" in the left/right Mode dropdown.
+
+### Additional Resonator Modes
+
+Fourteen more modes (v4.30-duallooper.10 or later) play like String and Bar: monophonic, the same note keys, threshold sequence and immediate octave switch, but the nine resonators ring at the note times a fixed table of partials instead of the harmonic series. Their LED is steady white. They cost no extra CPU.
+
+| # | Mode | Partials |
+|---|------|----------|
+| 5 | Piano | Harmonics slightly stretched, like a stiff string |
+| 6 | Tube | Odd harmonics only (closed tube) |
+| 7 | Membrane | Drum head, inharmonic |
+| 8 | Bell | Church bell, hum an octave below |
+| 9 | Glass | Wine glass, widely spaced |
+| 10 | Gong | Free circular plate |
+| 11 | Plate | Rectangular plate |
+| 12 | Fifths | Octaves and fifths over four octaves |
+| 13 | Major 9 | Open major 7/9 chord (just intonation) |
+| 14 | Minor 11 | Minor 7/9/11 chord (just intonation) |
+| 15 | Air | The root with harmonics 7–16 |
+| 16 | Chorus | Root, fifth and octave, each at −6, 0 and +6 cents (slow beating) |
+| 17 | Tanpura | Pa–Sa drone with harmonics |
+| 18 | Custom | The nine Ratio Mode ratios on one note |
+
+The consonant tables (Fifths to Tanpura) suit pads, voice and drones; the physical ones (Piano to Plate) respond best to clicks, taps and noise bursts with a long Decay.
+
+- **Mode button cycle**: by default the Mode button steps through all nineteen modes. In [USB Web Configuration](#9-usb-web-configuration), "Modes in the Mode Button Cycle" chooses which ones it visits (at least one; saved with Save to Flash).
+- **Direct selection**: the left/right Mode dropdown of the configuration page, the Mode select of the Loop Monitor, or MIDI **CC 9** (value = mode number, 0–18). CC 0 keeps its five bands for the original modes.
 
 ## 5. Custom Caves
 
@@ -178,6 +204,8 @@ Factory defaults: left = channel 1, right = channel 2, both = channel 3. These c
 | 77–102 | Cave |
 | 103–127 | Ratio |
 
+**CC 9 — Direct mode select** (v4.30-duallooper.10 or later): value = mode number, 0–18 (see [Additional Resonator Modes](#additional-resonator-modes)); larger values are ignored.
+
 > As of v4, CC 0 changed from the original four bands (0-31 / 32-63 / 64-95 / 96-127 + 127 as a single point) to a five-way even split. If you previously used fixed CC values to switch modes, re-check them against this table.
 
 **Fader CC**:
@@ -202,7 +230,8 @@ Open [https://wingie.wingpinger.com](https://wingie.wingpinger.com) and choose "
 
 On connection, the page reads one complete device snapshot. You can modify the following; **every valid edit takes effect on the running sound immediately, with no Apply step**:
 
-- **Left/right channels**: Mode (Poly / String / Bar / Cave / Ratio), Input Threshold
+- **Left/right channels**: Mode (Poly / String / Bar / Cave / Ratio and the [additional resonator modes](#additional-resonator-modes)), Input Threshold
+- **Modes in the Mode Button Cycle**: which modes the panel Mode button steps through
 - **Shared settings**: A3 frequency (358.08–521.91 Hz), Tuning (Standard + 8 alternate tunings), Pre/Post Clip Gain, three MIDI channel routes, MPE switch, line-input stereo/mono
 - **Ratio Mode profile**: 9 resonator ratios (grouped into three Voices), with "Copy Voice 1 to Voices 2 & 3" and factory-reset buttons
 - **Caves**: 3 banks per channel, each with 9 resonator frequencies and mute states
@@ -356,7 +385,7 @@ There are two ways to write current settings to flash so they persist after rest
 1. **Panel dual-button save**: Hold both Mode buttons simultaneously for three seconds. During the countdown, the LED cycles through the four colors and flashes when the countdown ends to indicate completion. This operation may cause a brief noise and is not recommended during recording or live performance.
 2. **Web Save to Flash**: Click "Save to Flash" and confirm in [USB Web Configuration](#9-usb-web-configuration).
 
-Saved settings include: A3 frequency, tuning, Pre/Post Clip Gain, three MIDI channel routes, left/right Mode and Input Threshold, the shared Ratio profile, all three Cave banks per channel (frequencies and mute), the MPE switch, and line-input stereo/mono. Toggling line mono by holding both C keys at startup writes flash immediately and does not require the dual-button save.
+Saved settings include: A3 frequency, tuning, Pre/Post Clip Gain, three MIDI channel routes, left/right Mode and Input Threshold, the modes in the Mode button cycle, the shared Ratio profile, all three Cave banks per channel (frequencies and mute), the MPE switch, and line-input stereo/mono. Toggling line mono by holding both C keys at startup writes flash immediately and does not require the dual-button save.
 
 ## 15. Caves Mode and Alternate Tunings
 

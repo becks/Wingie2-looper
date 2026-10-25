@@ -71,7 +71,7 @@ each audio loop restart flashes the side purple (white in Cave mode).
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
 level and direction, the panel keys and controls, the looper latch (Locked while the layer is locked), and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
-side's Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
+side's Mode select (any of the [resonator modes](#resonator-modes), v4.30-duallooper.10 or later), Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
 (varispeed / pitch / stretch, MIDI CC 87), speed step buttons (the same steps as F/G, MIDI CC 86)
 and the Looper latch and Live input in playback checkboxes (running state, saved like the other
@@ -80,6 +80,38 @@ desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later; the
 looper latch needs v4.30-duallooper.8 or later and live input v4.30-duallooper.9 or later
 (hidden on older firmware).
+
+## Resonator modes
+
+Besides the original five (Poly, String, Bar, Cave, Ratio) each side has fourteen more modes,
+all pitched like String and Bar: one note, the nine resonators ringing at that note times a
+fixed table of partials, the same note keys, tap sequence, threshold and octave behaviour, and a
+steady white LED. They cost no extra CPU (only the resonator frequencies change).
+
+| # | Mode | Partials |
+|---|------|----------|
+| 5 | Piano | harmonics slightly stretched, like a stiff string |
+| 6 | Tube | odd harmonics only (closed tube) |
+| 7 | Membrane | drum head, inharmonic |
+| 8 | Bell | church bell, hum an octave below |
+| 9 | Glass | wine glass, widely spaced |
+| 10 | Gong | free circular plate |
+| 11 | Plate | rectangular plate |
+| 12 | Fifths | octaves and fifths over four octaves |
+| 13 | Major 9 | open major 7/9 chord (just intonation) |
+| 14 | Minor 11 | minor 7/9/11 chord (just intonation) |
+| 15 | Air | the root with harmonics 7–16 |
+| 16 | Chorus | root, fifth and octave, each at −6, 0 and +6 cents (slow beating) |
+| 17 | Tanpura | Pa–Sa drone with harmonics |
+| 18 | Custom | the nine Ratio profile ratios on one note |
+
+The consonant tables (Fifths to Tanpura) suit pads and drones; the physical ones (Piano to Plate)
+suit clicks, taps and noise bursts. The Mode button steps through all nineteen by default; tick
+only the ones you want in "Modes in the Mode Button Cycle" in the
+[USB configuration page](#wingie2-usb-configuration) and Save. The Mode fields of the
+configuration page and the Loop Monitor select any mode directly, and so does MIDI CC 9 on the
+side's channel (value = mode number, 0–18). CC 0 keeps its five bands for the original modes.
+Requires v4.30-duallooper.10 or later.
 
 ## Stereo pan
 
@@ -122,7 +154,7 @@ CC 10 = 64 is the center). A pan received over MIDI is also kept by the next Sav
 运行的共享实体旋钮参数，直接由 Wingie2 面板控制，不写入 flash。
 
 Save 会持久化 A3、Tuning、Pre/Post Clip Gain、三个 MIDI 通道路由、左右 Mode 与 Input
-Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、Looper 播放时的实时输入、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
+Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、Looper 播放时的实时输入、Mode 按键循环包含的模式、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
 左右声道共用，9 个 ratio 按每 3 个一组分为 Voice 1/2/3；Ratio 模式下三个复音分别使用
 Voice 1/2/3 的比例，页面提供“复制 Voice 1 到 Voice 2、3”按钮将 Voice 1 的比例复制到另外两组 Voice。
 Factory Ratio 和导入配置都先改变运行状态，仍需 Save。Cave 频率范围为
@@ -160,7 +192,7 @@ not display or edit Mix, Decay, or Volume: those are runtime-only shared physica
 and are not written to flash.
 
 Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode, Input
-Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, live input during playback, the shared Ratio profile, and all three Cave banks
+Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, live input during playback, the modes in the Mode button cycle, the shared Ratio profile, and all three Cave banks
 for each channel, including frequency and mute. The shared Ratio profile's nine ratios are grouped into Voices 1/2/3, three ratios per
 voice; in Ratio polyphonic mode, the three voices use the ratios of Voices 1/2/3 respectively, and the
 “Copy Voice 1 to Voices 2&3” button copies Voice 1's ratios into the other two voices. Factory Ratio

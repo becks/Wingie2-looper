@@ -72,17 +72,14 @@ bool consume_mode_change_request(byte ch) {
   const bool viaMidi = modeChangingFromMIDI[ch];
   modeChangingFromKeys[ch] = false;
   modeChangingFromMIDI[ch] = false;
-  if (viaKeys) {
-    if (Mode[ch] < MODE_NUM) Mode[ch] += 1;
-    else Mode[ch] = 0;
-  }
+  if (viaKeys) Mode[ch] = wingie_modes::nextModeInCycle(Mode[ch], mode_cycle);
   taskEXIT_CRITICAL(&g_deviceMux);
   return viaKeys || viaMidi;
 }
 
 void set_mode_from_midi(byte ch, int mode) {
   taskENTER_CRITICAL(&g_deviceMux);
-  if (mode <= RATIO_MODE && Mode[ch] != mode) {
+  if (mode >= 0 && mode <= LAST_MODE && Mode[ch] != mode) {
     Mode[ch] = mode;
     modeChangingFromMIDI[ch] = true;
   }

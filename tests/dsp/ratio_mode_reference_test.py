@@ -86,8 +86,11 @@ class RatioModeReferenceTest(unittest.TestCase):
         self.assertIn('addVerticalSlider("poly_pitch_ratio_0"', generated)
         self.assertIn("Mode[ch] == POLY_MODE ? 0 : 1", firmware)
         self.assertIn("configured_note_frequency(midiNote) * wingie_mpe::pitchRatio(currentPitchBend[ch])", firmware)
-        self.assertIn("return index + 1.0f;", firmware)
-        self.assertIn("return barFactor * barIndex * barIndex;", firmware)
+        modes = (REPO_ROOT / "Wingie2/resonator_modes.h").read_text(encoding="utf-8")
+        self.assertIn("case kString: return index + 1.0f;", modes)
+        self.assertIn("return kBarFactor * barIndex * barIndex;", modes)
+        self.assertIn("static const float kBarFactor = 0.44444f;", modes)
+        self.assertIn("return wingie_modes::partialRatio(mode, index, ratio_profile.ratios);", firmware)
         self.assertIn("fundamental * pitched_mode_ratio(Mode[ch], index)", firmware)
         self.assertIn("set_conventional_channel_note(ch, channel, pitch);", midi)
         self.assertIn("(value * 5) >> 7", midi)
@@ -196,8 +199,8 @@ class RatioModeReferenceTest(unittest.TestCase):
             "cycle_ratio_voice_note(ch, i + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));",
             control,
         )
-        # Tap Sequencer 回放仅 STRING/BAR。
-        self.assertIn("if (Mode[ch] != STRING_MODE && Mode[ch] != BAR_MODE) continue;", control)
+        # Tap Sequencer 回放仅单音模式（String、Bar 与之后的音高模式）。
+        self.assertIn("if (!wingie_modes::isPitchedMono(Mode[ch])) continue;", control)
 
         # ratio profile 更新时全声部重应用。
         self.assertIn("apply_all_ratio_voice_pitch(ch);", serial_config)
