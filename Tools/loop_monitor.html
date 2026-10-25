@@ -106,6 +106,12 @@
     .speed-steps .mode-last { margin-right: 8px; }
     .speed-steps button[aria-pressed="true"] { background: var(--wave); border-color: var(--wave); color: var(--bg); }
     .meta b { color: var(--text); font-weight: 600; }
+    .mode-select { font: inherit; font-weight: 600; color: var(--text); background: #262932; border: 1px solid #3a3e4a; border-radius: 4px; padding: 1px 4px; transition: color 700ms ease-out; }
+    .mode-select.changed { color: var(--rec); transition: none; }
+    /* The panel LED of the side's mode: steady, or white/yellow alternating for Ratio. */
+    .mode-led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 5px 0 2px; vertical-align: 0; background: var(--a, transparent); }
+    .mode-led.even { animation: led-even 1s step-end infinite; }
+    @keyframes led-even { 0% { background: var(--a); } 50% { background: var(--b); } }
 
     section h3 {
       margin: 0 0 6px;
@@ -280,8 +286,8 @@
         mode (not in Cave mode).</p>
     </section>
     <footer>
-      View over USB (Web Serial, Chrome or Edge). The only controls are each side's Pan, SOS and
-      speed steps: Pan changes the running state (save it from the configuration page or by holding
+      View over USB (Web Serial, Chrome or Edge). The only controls are each side's mode, Pan, SOS and
+      speed steps: mode and Pan change the running state (save them from the configuration page or by holding
       both Mode buttons for 3 s); SOS and speed are not saved (SOS returns to 80%, speed to 1× at
       power-on). Close the page before using the Arduino serial monitor or the web flasher. Requires
       firmware v4.30-duallooper.5 or later; Pan and SOS need v4.30-duallooper.6 or later, the speed
@@ -293,7 +299,7 @@
     <div class="side">
       <div class="side-head">
         <h2 data-name></h2>
-        <span class="meta">Mode <b data-mode>–</b></span>
+        <label class="meta" data-mode-wrap>Mode <i class="mode-led" data-mode-led aria-hidden="true"></i><select class="mode-select" data-mode aria-label="Resonator mode" disabled></select></label>
         <span class="meta">Octave <b data-octave>–</b></span>
         <span class="meta">Note <b data-note>–</b></span>
         <label class="meta control" data-pan-wrap hidden title="Stereo pan after the resonator. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s.">Pan <input type="range" min="0" max="1" step="0.01" data-pan aria-label="Pan"> <b data-pan-value>–</b></label>
@@ -331,7 +337,33 @@
     "use strict";
 
     const SIDES = ["left", "right"];
-    const MODES = ["Poly", "String", "Bar", "Cave", "Ratio"];
+    const MODES = ["Poly", "String", "Bar", "Cave", "Ratio", "Piano", "Tube", "Membrane", "Bell", "Glass", "Gong",
+                   "Plate", "Fifths", "Major 9", "Minor 11", "Air", "Chorus", "Tanpura", "Custom"];
+    // Panel LED per mode: steady, except Ratio alternating white and yellow; the
+    // modes after Ratio are white like Poly.
+    const LED_COLORS = {w: "#f2f2f2", y: "#f5c84c", r: "#e5484d", p: "#a970ff"};
+    const MODE_LEDS = ["w", "y", "r", "p", "wy even"];  // later modes: white
+    const MODE_INFO = [
+      "Three voices, three harmonics each",
+      "One note, harmonics 1-9",
+      "One note, free bar partials",
+      "Nine fixed frequencies (Cave banks)",
+      "Three voices, Ratio profile ratios",
+      "One note, slightly stretched harmonics (stiff string)",
+      "One note, odd harmonics 1, 3, 5 ... 17 (closed tube)",
+      "One note, circular membrane partials (drum head)",
+      "One note, bell partials with the hum an octave below",
+      "One note, thin ring partials, wide (wine glass)",
+      "One note, free circular plate partials",
+      "One note, rectangular plate partials",
+      "One note, octaves and fifths over four octaves (drone)",
+      "One note, open major 7/9 chord (pad)",
+      "One note, minor 7/9/11 chord (dark pad)",
+      "One note, the root and high harmonics 7-16 (airy)",
+      "One note, root, fifth and octave three times at -6, 0, +6 cents (slow beating)",
+      "One note, Pa-Sa tanpura drone with harmonics",
+      "One note, the nine Ratio profile ratios"
+    ];
     const KEY_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     const BLACK = [1, 3, 6, 8, 10];
     const STATUS_INTERVAL_MS = 150;
@@ -401,6 +433,8 @@
       lastNotesMs: null,
       playedUntil: new Array(12).fill(0),
       controls: {pan: {holdUntil: 0, wanted: null, busy: false}, sos: {holdUntil: 0, wanted: null, busy: false}},
+      modeHoldUntil: 0,
+      modeBusy: false,
       ui: null,
     }));
     let fps = 4900;
@@ -415,6 +449,7 @@
     let steps = null;
     let speedStepsSupported = false;
     let speedModesSupported = false;
+    let resonatorModesSupported = false;  // older firmware stops at Ratio (mode 4)
     let pollTimer = null;
     let statusBusy = false;
 
@@ -451,6 +486,14 @@
         ui.speedSteps.appendChild(button);
         return button;
       });
+      MODES.forEach((name, index) => {
+        const option = document.createElement("option");
+        option.value = index;
+        option.textContent = name;
+        option.title = MODE_INFO[index];
+        ui.mode.appendChild(option);
+      });
+      ui.mode.addEventListener("change", () => sendMode(side, Number(ui.mode.value)));
       ui.stepButtons = SPEED_STEPS.map((step, index) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -500,6 +543,20 @@
         await request("set_param", {target: side.name, name: "speed_mode", value: mode});
       } catch (error) {
         setMessage("Speed mode not applied: " + error.message, true);
+      }
+    }
+
+    // The side's resonator mode (set_param mode); the poll waits until the device has it.
+    async function sendMode(side, mode) {
+      if (!transport.connected) return;
+      side.modeBusy = true;
+      try {
+        await request("set_param", {target: side.name, name: "mode", value: mode});
+      } catch (error) {
+        setMessage("Mode not applied: " + error.message, true);
+      } finally {
+        side.modeBusy = false;
+        side.modeHoldUntil = performance.now() + CONTROL_HOLD_MS;
       }
     }
 
@@ -694,6 +751,7 @@
         if (hello.device !== "Wingie2") throw new Error("not a Wingie2");
         speedStepsSupported = (hello.capabilities || []).includes("speed_steps");
         speedModesSupported = (hello.capabilities || []).includes("speed_modes");
+        resonatorModesSupported = (hello.capabilities || []).includes("resonator_modes");
         try {
           await request("loop_status");
         } catch (error) {
@@ -966,7 +1024,25 @@
       const elapsed = status && transport.connected ? now - side.statusAt : 0;
       if (status) {
         const {audio, notes} = status;
-        setValue(ui.mode, String(MODES[status.mode] || status.mode), now);
+        for (const option of ui.mode.options) option.hidden = !resonatorModesSupported && Number(option.value) > 4;
+        ui.mode.disabled = !transport.connected;
+        if (!side.modeBusy && now > side.modeHoldUntil) {
+          if (ui.mode.value !== String(status.mode)) {
+            if (ui.mode.dataset.filled) ui.mode.dataset.changedUntil = now + CHANGED_MS;
+            ui.mode.value = String(status.mode);
+            ui.mode.dataset.filled = "1";
+          }
+        }
+        ui.mode.classList.toggle("changed", Number(ui.mode.dataset.changedUntil || 0) > now);
+        const led = MODE_LEDS[status.mode] || (status.mode > 4 ? "w" : "");
+        if (ui.modeLed.dataset.led !== led) {
+          ui.modeLed.dataset.led = led;
+          const [colors, rhythm] = led.split(" ");
+          ui.modeLed.className = "mode-led" + (rhythm ? " " + rhythm : "");
+          ui.modeLed.style.setProperty("--a", LED_COLORS[led[0]] || "transparent");
+          ui.modeLed.style.setProperty("--b", LED_COLORS[colors[1] || led[0]] || "transparent");
+          ui.modeWrap.title = (MODE_INFO[status.mode] || "") + (led ? " · LED as on the panel" : "");
+        }
         setValue(ui.octave, (status.octave > 0 ? "+" : "") + status.octave, now);
         ui.note.textContent = noteName(status.note);
         setBadge(ui.audioState, audioBadge(audio.state, audio.length));

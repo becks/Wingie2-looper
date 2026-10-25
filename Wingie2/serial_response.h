@@ -66,6 +66,7 @@ struct SharedSettings {
   bool lineInputMono;
   bool looperLatch;  // tap both Mode buttons to lock the looper layer
   bool looperLiveInput;  // live input stays audible while a loop plays
+  int modeCycle;  // bit n: mode n is in the Mode button cycle
 };
 
 // status 响应快照
@@ -204,7 +205,8 @@ inline void appendSettingsLimits(JsonResponse &response) {
       "\"mpe_enabled\":[%g,%g,1],"
       "\"line_input_mono\":[%g,%g,1],"
       "\"looper_latch\":[%g,%g,1],"
-      "\"looper_live_input\":[%g,%g,1]}",
+      "\"looper_live_input\":[%g,%g,1],"
+      "\"mode_cycle\":[%g,%g,1]}",
       static_cast<float>(wingie_config::kModeMin), static_cast<float>(wingie_config::kModeMax),
       wingie_config::kThresholdMin, wingie_config::kThresholdMax, wingie_config::kThresholdStep,
       wingie_config::kPanMin, wingie_config::kPanMax, wingie_config::kPanStep,
@@ -218,20 +220,21 @@ inline void appendSettingsLimits(JsonResponse &response) {
       static_cast<float>(wingie_config::kMpeEnabledMin), static_cast<float>(wingie_config::kMpeEnabledMax),
       static_cast<float>(wingie_config::kLineInputMonoMin), static_cast<float>(wingie_config::kLineInputMonoMax),
       static_cast<float>(wingie_config::kLooperLatchMin), static_cast<float>(wingie_config::kLooperLatchMax),
-      static_cast<float>(wingie_config::kLooperLiveInputMin), static_cast<float>(wingie_config::kLooperLiveInputMax));
+      static_cast<float>(wingie_config::kLooperLiveInputMin), static_cast<float>(wingie_config::kLooperLiveInputMax),
+      static_cast<float>(wingie_config::kModeCycleMin), static_cast<float>(wingie_config::kModeCycleMax));
 }
 
 inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmware) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));
 }
 
-// dirty 只反映 general settings（midi/调律/增益/阈值/模式/MPE/线路单声道/looper latch/live input）；
+// dirty 只反映 general settings（midi/调律/增益/阈值/模式/MPE/线路单声道/looper latch/live input/mode cycle）；
 // dirtyAll 反映全量配置（另含 ratio 与 cave），供只读 get_settings 的消费方判断是否真正全部落盘。
 inline void encodeSettings(JsonResponse &response, uint32_t id, bool sourceLine, bool dirty,
                            bool dirtyAll,
@@ -248,14 +251,15 @@ inline void encodeSettings(JsonResponse &response, uint32_t id, bool sourceLine,
                   "\"pre_clip_gain\":%.4f,\"post_clip_gain\":%.4f,"
                   "\"midi\":{\"left\":%d,\"right\":%d,\"both\":%d},"
                   "\"mpe_enabled\":%s,\"line_input_mono\":%s,\"looper_latch\":%s,"
-                  "\"looper_live_input\":%s}",
+                  "\"looper_live_input\":%s,\"mode_cycle\":%d}",
                   shared.a3Hz, shared.tuning,
                   shared.preClipGain, shared.postClipGain,
                   shared.midiLeft, shared.midiRight, shared.midiBoth,
                   shared.mpeEnabled ? "true" : "false",
                   shared.lineInputMono ? "true" : "false",
                   shared.looperLatch ? "true" : "false",
-                  shared.looperLiveInput ? "true" : "false");
+                  shared.looperLiveInput ? "true" : "false",
+                  shared.modeCycle);
   appendSettingsLimits(response);
   response.append("}");
 }

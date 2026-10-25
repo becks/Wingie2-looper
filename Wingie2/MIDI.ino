@@ -37,7 +37,7 @@ void handleNoteOff(byte channel, byte pitch, byte velocity) {
 
 void MIDISetPitch(int ch, int mode, int pitch, byte channel) {
 
-  if (mode == STRING_MODE || mode == BAR_MODE) {
+  if (wingie_modes::isPitchedMono(mode)) {
     set_conventional_channel_note(ch, channel, pitch);
   }
 
@@ -150,6 +150,8 @@ void MIDISetParam(int ch, byte number, byte value) {
     int modeFromMIDI = (value * 5) >> 7;
     set_mode_from_midi(ch, modeFromMIDI);
   }
+
+  if (number == CC_MODE_SELECT) set_mode_from_midi(ch, value);  // values past the last mode are ignored
 
   if (number == CC_MIX or number == CC_MIX + 32) {
     potValSampled[MIX] = potValRealtime[MIX];

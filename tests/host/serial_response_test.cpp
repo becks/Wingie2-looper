@@ -17,7 +17,7 @@ static void testHello() {
   checkResponse(response,
       "{\"v\":1,\"id\":1,\"ok\":true,\"op\":\"hello\",\"device\":\"Wingie2\","
       "\"firmware\":\"dev\","
-      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\"],"
+      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\"],"
       "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":1024}}");
 
   JsonResponse longFirmware;
@@ -100,6 +100,7 @@ static void testSettings() {
   shared.lineInputMono = false;
   shared.looperLatch = true;
   shared.looperLiveInput = true;
+  shared.modeCycle = 31;
 
   JsonResponse response;
   encodeSettings(response, 2, true, true, true, left, right, shared);
@@ -108,8 +109,8 @@ static void testSettings() {
       "\"dirty_all\":true,\"left\":{\"mode\":1,\"mix\":0.5000,\"decay\":2.5000,\"volume\":0.7500,\"threshold\":0.4125,\"pan\":0.0000},"
       "\"right\":{\"mode\":2,\"mix\":0.2500,\"decay\":1.0000,\"volume\":0.5000,\"threshold\":0.9900,\"pan\":0.7500},"
       "\"shared\":{\"a3_hz\":440.00,\"tuning\":-1,\"pre_clip_gain\":0.2475,\"post_clip_gain\":0.8250,"
-      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false,\"looper_latch\":true,\"looper_live_input\":true},"
-      "\"limits\":{\"mode\":[0,4,1],"
+      "\"midi\":{\"left\":1,\"right\":2,\"both\":3},\"mpe_enabled\":false,\"line_input_mono\":false,\"looper_latch\":true,\"looper_live_input\":true,\"mode_cycle\":31},"
+      "\"limits\":{\"mode\":[0,18,1],"
       "\"threshold\":[0.0825,0.99,0.0825],"
       "\"pan\":[0,1,0.01],"
       "\"a3_hz\":[358.08,521.91,0.01],"
@@ -118,7 +119,7 @@ static void testSettings() {
       "\"post_clip_gain\":[0.385,0.99,0.055],"
       "\"midi_left\":[1,16,1],\"midi_right\":[1,16,1],\"midi_both\":[1,16,1],"
       "\"mpe_enabled\":[0,1,1],\"line_input_mono\":[0,1,1],\"looper_latch\":[0,1,1],"
-      "\"looper_live_input\":[0,1,1]}}");
+      "\"looper_live_input\":[0,1,1],\"mode_cycle\":[1,524287,1]}}");
 
   shared.mpeEnabled = true;
   shared.looperLatch = false;
@@ -127,7 +128,20 @@ static void testSettings() {
   encodeSettings(micResponse, 3, false, false, false, left, right, shared);
   assert(strstr(micResponse.data, "\"source\":\"mic\",\"dirty\":false") != nullptr);
   assert(strstr(micResponse.data, "\"dirty_all\":false") != nullptr);
-  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false,\"looper_latch\":false,\"looper_live_input\":false},\"limits\":{") != nullptr);
+  assert(strstr(micResponse.data, "\"mpe_enabled\":true,\"line_input_mono\":false,\"looper_latch\":false,\"looper_live_input\":false,\"mode_cycle\":31},\"limits\":{") != nullptr);
+
+  // Worst case still fits one frame: every mode in the cycle, the last mode, long values.
+  left.mode = right.mode = 18;
+  left.decay = right.decay = 99999.9999f;
+  shared.a3Hz = 521.91f;
+  shared.tuning = -1;
+  shared.midiLeft = shared.midiRight = shared.midiBoth = 16;
+  shared.modeCycle = 524287;
+  JsonResponse worst;
+  encodeSettings(worst, 4294967295u, false, true, true, left, right, shared);
+  assert(worst.valid);
+  assert(strstr(worst.data, "\"mode_cycle\":524287}") != nullptr);
+  assert(worst.length < wingie_serial::kMaxFrameBytes);
 }
 
 static void testRatioProfile() {

@@ -120,7 +120,7 @@ void noteLoopRecordKey(byte ch, byte keyIndex) {
 // Replays a recorded panel key at the current octave, without touching the
 // String/Bar tap sequence that live presses build.
 void playRecordedKey(byte ch, byte keyIndex) {
-  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+  if (wingie_modes::isPitchedMono(Mode[ch])) {
     note[ch] = keyIndex;
     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
   } else if (Mode[ch] == POLY_MODE) {
@@ -245,6 +245,7 @@ void control(void *pvParameters) {
     prefs.putBool("line_input_mono", false);
     prefs.putBool("looper_latch", false);
     prefs.putBool("looper_live_input", false);
+    prefs.putUInt("mode_cycle", wingie_modes::kDefaultCycleMask);
     prefs.putFloat("left_pan", wingie_config::kDefaultPan[0]);
     prefs.putFloat("right_pan", wingie_config::kDefaultPan[1]);
     prefs.putBool("unq_caves_store", false);
@@ -289,6 +290,8 @@ void control(void *pvParameters) {
   looper_live_input = prefs.getBool("looper_live_input", false);
   apply_looper_live_input();
   Serial.printf("looper_live_input = %d\n", looper_live_input);
+  mode_cycle = wingie_modes::sanitizeCycle(prefs.getUInt("mode_cycle", wingie_modes::kDefaultCycleMask));
+  Serial.printf("mode_cycle = 0x%05lx\n", static_cast<unsigned long>(mode_cycle));
   float a3_freq_offset = prefs.getFloat("a3_freq_offset", 0);
   a3_freq = 440. + a3_freq_offset;
   dsp.setParamValue("a3_freq", a3_freq);
@@ -395,12 +398,12 @@ void control(void *pvParameters) {
   }
 
   Mode[0] = prefs.getUChar("left_mode", POLY_MODE);
-  if (Mode[0] > RATIO_MODE) Mode[0] = POLY_MODE;
+  if (Mode[0] > LAST_MODE) Mode[0] = POLY_MODE;
   set_channel_dsp_mode(0);
   Serial.printf("left_mode = %d\n", Mode[0]);
 
   Mode[1] = prefs.getUChar("right_mode", POLY_MODE);
-  if (Mode[1] > RATIO_MODE) Mode[1] = POLY_MODE;
+  if (Mode[1] > LAST_MODE) Mode[1] = POLY_MODE;
   set_channel_dsp_mode(1);
   Serial.printf("right_mode = %d\n", Mode[1]);
 
@@ -812,13 +815,13 @@ void control(void *pvParameters) {
                 if (firstPress[ch]) {
                   firstPress[ch] = false;
 
-                  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+                  if (wingie_modes::isPitchedMono(Mode[ch])) {
                     note[ch] = i;
                     tapSequence[ch].reset(uint8_t(i));
                     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
                   }
                 } else {  // Not First Press
-                  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+                  if (wingie_modes::isPitchedMono(Mode[ch])) {
                     note[ch] = i;
                     tapSequence[ch].append(uint8_t(i));
                     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
@@ -990,7 +993,7 @@ void control(void *pvParameters) {
     trig[1] = dsp.getParamValue("/Wingie/right_trig");
 
     for (int ch = 0; ch < 2; ch++) {
-      if (Mode[ch] != STRING_MODE && Mode[ch] != BAR_MODE) continue;  // Tap Sequencer 仅 STRING/BAR 回放
+      if (!wingie_modes::isPitchedMono(Mode[ch])) continue;  // Tap Sequencer 仅单音（String/Bar 等）回放
       if (tapSequence[ch].hasCycle()) {
         if (trig[ch] && !trigged[ch]) {
           trigged[ch] = true;

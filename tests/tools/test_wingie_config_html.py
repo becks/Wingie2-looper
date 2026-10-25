@@ -251,8 +251,8 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn('data-i18n-zh="Voice ${slot}"', self.source)
         self.assertIn('data-i18n-en="Voice ${slot}"', self.source)
         for phrase in (
-            'data-i18n-zh="三复音，每复音对应三个共鸣器"',
-            'data-i18n-en="Three-voice polyphony, three resonators per voice"',
+            'data-i18n-zh="三复音，每复音对应三个共鸣器；自定义模式把九个比例用在同一个音上"',
+            'data-i18n-en="Three-voice polyphony, three resonators per voice; Custom mode plays all nine ratios on one note"',
             'id="wg-copy-slot1"',
             'class="wg-button"',
             'data-i18n-zh="复制 Voice 1 到 Voice 2、3"',
@@ -326,7 +326,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn("grid-template-columns: repeat(6, minmax(0, 1fr))", self.source)
         self.assertEqual(self.source.count('class="wg-field wg-field-half"'), 4)
         self.assertEqual(self.source.count('class="wg-field wg-field-third"'), 3)
-        self.assertEqual(self.source.count('class="wg-field wg-field-full"'), 4)
+        self.assertEqual(self.source.count('class="wg-field wg-field-full"'), 5)
         self.assertIn("@media (max-width: 760px)", self.source)
         self.assertIn('data-mobile-side="left"', self.source)
         self.assertIn("overflow-x: auto", self.source)
@@ -529,7 +529,7 @@ class WingieConfigHtmlTest(unittest.TestCase):
         self.assertIn("store.putBool", self.storage_source)
         self.assertIn('"mpe_enabled\\":%s', self.response_source)
         self.assertIn('"line_input_mono\\":%s', self.response_source)
-        self.assertIn('"capabilities\\\":[\\\"settings\\\",\\\"ratio_mode\\\",\\\"cave_config\\\",\\\"mpe\\\",\\\"speed_steps\\\",\\\"speed_modes\\\"]', self.response_source)
+        self.assertIn('"capabilities\\\":[\\\"settings\\\",\\\"ratio_mode\\\",\\\"cave_config\\\",\\\"mpe\\\",\\\"speed_steps\\\",\\\"speed_modes\\\",\\\"resonator_modes\\\"]', self.response_source)
         self.assertIn('"config_schema\\":6', self.response_source)
         self.assertRegex(
             self.storage_source,

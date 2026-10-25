@@ -32,17 +32,33 @@
 #include "device_state.h"
 #include "mpe_state.h"
 #include "note_looper.h"
+#include "resonator_modes.h"
 #include "speed_steps.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
 #include <MIDI.h>
 
-#define MODE_NUM 4 // +1
 #define POLY_MODE 0
 #define STRING_MODE 1
 #define BAR_MODE 2
 #define CAVE_MODE 3
 #define RATIO_MODE 4
+// Pitched modes like String and Bar with other partial tables (resonator_modes.h).
+#define PIANO_MODE 5
+#define TUBE_MODE 6
+#define MEMBRANE_MODE 7
+#define BELL_MODE 8
+#define GLASS_MODE 9
+#define GONG_MODE 10
+#define PLATE_MODE 11
+#define FIFTHS_MODE 12
+#define MAJOR9_MODE 13
+#define MINOR11_MODE 14
+#define AIR_MODE 15
+#define CHORUS_MODE 16
+#define TANPURA_MODE 17
+#define CUSTOM_MODE 18
+#define LAST_MODE CUSTOM_MODE
 
 #define BASE_NOTE 48
 #define POLY_MODE_NOTE_ADD_L 12
@@ -54,6 +70,7 @@
 #define CAVE_HIGHEST_FREQ 16000
 
 #define CC_MODE 0
+#define CC_MODE_SELECT 9  // value = mode number 0-18, any mode
 #define CC_MIX 11
 #define CC_DECAY 1
 #define CC_VOL 7
@@ -80,8 +97,6 @@
 #define MIN_NOTE 36
 #define MAX_NOTE 96
 #define NUM_NOTES 60
-
-const float barFactor = 0.44444f;
 
 struct MySettings : public midi::DefaultSettings
 {
@@ -167,6 +182,8 @@ bool looperLatchFlashOn = false;
 unsigned long looperLatchFlashTimer = 0;
 // Live input mixed in at -6 dB while a loop plays (otherwise the loop replaces it).
 bool looper_live_input = false;
+// Modes the Mode button steps through (bit n = mode n); every mode by default.
+volatile uint32_t mode_cycle = wingie_modes::kDefaultCycleMask;
 bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
@@ -459,7 +476,9 @@ void set_mode_led(byte ch) {
     }
     return;
   }
-  for (int index = 0; index < 2; index++) digitalWrite(ledPin[ch][index], !bitRead(ledColor[Mode[ch]], index));
+  // The modes after Ratio stay white, like Poly.
+  const byte color = ledColor[Mode[ch] < RATIO_MODE ? Mode[ch] : POLY_MODE];
+  for (int index = 0; index < 2; index++) digitalWrite(ledPin[ch][index], !bitRead(color, index));
 }
 
 // mark_cave_changed 已收进 device_state.ino，见 device_state.h（revision 与 dirty 在同一临界区内更新）。
@@ -582,13 +601,14 @@ float configured_note_frequency(int midiNote) {
   return mtof(midiNote - degree) * alt_tunings[alt_tuning_index][degree];
 }
 
+static_assert(POLY_MODE == wingie_modes::kPoly && RATIO_MODE == wingie_modes::kRatio &&
+              PIANO_MODE == wingie_modes::kPiano && FIFTHS_MODE == wingie_modes::kFifths &&
+              CUSTOM_MODE == wingie_modes::kCustom &&
+              LAST_MODE + 1 == wingie_modes::kModeCount,
+              "Mode numbers must match resonator_modes.h");
+
 float pitched_mode_ratio(byte mode, uint8_t index) {
-  if (mode == STRING_MODE) return index + 1.0f;
-  if (mode == BAR_MODE) {
-    const float barIndex = index + 1.5f;
-    return barFactor * barIndex * barIndex;
-  }
-  return ratio_profile.ratios[index];
+  return wingie_modes::partialRatio(mode, index, ratio_profile.ratios);
 }
 
 void apply_pitched_mode_channel(byte ch, int midiNote) {
@@ -607,7 +627,7 @@ void apply_pitched_mode_channel(byte ch, int midiNote) {
 void set_channel_pitch(byte ch, int midiNote, float bendSemitones) {
   currentNote[ch] = midiNote;
   currentPitchBend[ch] = bendSemitones;
-  if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+  if (wingie_modes::isPitchedMono(Mode[ch])) {
     apply_pitched_mode_channel(ch, midiNote);
   }
 }
@@ -621,7 +641,7 @@ void apply_current_mode_parameters(byte ch) {
   if (Mode[ch] == POLY_MODE || Mode[ch] == RATIO_MODE) {
     unmute_channel_resonators(ch);
     apply_all_voice_pitch(ch);
-  } else if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+  } else if (wingie_modes::isPitchedMono(Mode[ch])) {
     apply_pitched_mode_channel(ch, currentNote[ch]);
   } else if (Mode[ch] == CAVE_MODE) {
     apply_cave_bank_to_dsp(ch, oct[ch] + 1);
@@ -647,7 +667,7 @@ void apply_note_profiles_to_dsp() {
   for (byte ch = 0; ch < 2; ch++) {
     if (Mode[ch] == RATIO_MODE) {
       apply_all_ratio_voice_pitch(ch);
-    } else if (Mode[ch] == STRING_MODE || Mode[ch] == BAR_MODE) {
+    } else if (wingie_modes::isPitchedMono(Mode[ch])) {
       apply_pitched_mode_channel(ch, currentNote[ch]);
     }
   }

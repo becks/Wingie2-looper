@@ -549,6 +549,20 @@
       text-align: center;
     }
 
+    #wingie-config .wg-mode-cycle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+    }
+
+    #wingie-config .wg-field .wg-cycle-mode {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+      font-weight: 400;
+    }
+
     #wingie-config .wg-mute-input {
       width: 15px;
       height: 15px;
@@ -666,7 +680,7 @@
             <div class="wg-field">
               <label for="wg-left-mode" data-i18n-zh="模式" data-i18n-en="Mode"></label>
               <select id="wg-left-mode" class="wg-select" data-value-key="param:left:mode" disabled>
-                <option value="0" data-i18n-zh="复音" data-i18n-en="Poly"></option><option value="1" data-i18n-zh="琴弦" data-i18n-en="String"></option><option value="2" data-i18n-zh="音块" data-i18n-en="Bar"></option><option value="3">Cave</option><option value="4" data-i18n-zh="比率" data-i18n-en="Ratio"></option>
+                <option value="0" data-i18n-zh="复音" data-i18n-en="Poly"></option><option value="1" data-i18n-zh="琴弦" data-i18n-en="String"></option><option value="2" data-i18n-zh="音块" data-i18n-en="Bar"></option><option value="3">Cave</option><option value="4" data-i18n-zh="比率" data-i18n-en="Ratio"></option><option value="5" data-i18n-zh="钢琴弦" data-i18n-en="Piano"></option><option value="6" data-i18n-zh="管" data-i18n-en="Tube"></option><option value="7" data-i18n-zh="鼓膜" data-i18n-en="Membrane"></option><option value="8" data-i18n-zh="钟" data-i18n-en="Bell"></option><option value="9" data-i18n-zh="玻璃" data-i18n-en="Glass"></option><option value="10" data-i18n-zh="锣" data-i18n-en="Gong"></option><option value="11" data-i18n-zh="板" data-i18n-en="Plate"></option><option value="12" data-i18n-zh="五度" data-i18n-en="Fifths"></option><option value="13" data-i18n-zh="大九和弦" data-i18n-en="Major 9"></option><option value="14" data-i18n-zh="小十一和弦" data-i18n-en="Minor 11"></option><option value="15" data-i18n-zh="空气" data-i18n-en="Air"></option><option value="16" data-i18n-zh="合唱" data-i18n-en="Chorus"></option><option value="17" data-i18n-zh="坦布拉" data-i18n-en="Tanpura"></option><option value="18" data-i18n-zh="自定义" data-i18n-en="Custom"></option>
               </select>
             </div>
             <div class="wg-field">
@@ -701,7 +715,7 @@
             <div class="wg-field">
               <label for="wg-right-mode" data-i18n-zh="模式" data-i18n-en="Mode"></label>
               <select id="wg-right-mode" class="wg-select" data-value-key="param:right:mode" disabled>
-                <option value="0" data-i18n-zh="复音" data-i18n-en="Poly"></option><option value="1" data-i18n-zh="琴弦" data-i18n-en="String"></option><option value="2" data-i18n-zh="音块" data-i18n-en="Bar"></option><option value="3">Cave</option><option value="4" data-i18n-zh="比率" data-i18n-en="Ratio"></option>
+                <option value="0" data-i18n-zh="复音" data-i18n-en="Poly"></option><option value="1" data-i18n-zh="琴弦" data-i18n-en="String"></option><option value="2" data-i18n-zh="音块" data-i18n-en="Bar"></option><option value="3">Cave</option><option value="4" data-i18n-zh="比率" data-i18n-en="Ratio"></option><option value="5" data-i18n-zh="钢琴弦" data-i18n-en="Piano"></option><option value="6" data-i18n-zh="管" data-i18n-en="Tube"></option><option value="7" data-i18n-zh="鼓膜" data-i18n-en="Membrane"></option><option value="8" data-i18n-zh="钟" data-i18n-en="Bell"></option><option value="9" data-i18n-zh="玻璃" data-i18n-en="Glass"></option><option value="10" data-i18n-zh="锣" data-i18n-en="Gong"></option><option value="11" data-i18n-zh="板" data-i18n-en="Plate"></option><option value="12" data-i18n-zh="五度" data-i18n-en="Fifths"></option><option value="13" data-i18n-zh="大九和弦" data-i18n-en="Major 9"></option><option value="14" data-i18n-zh="小十一和弦" data-i18n-en="Minor 11"></option><option value="15" data-i18n-zh="空气" data-i18n-en="Air"></option><option value="16" data-i18n-zh="合唱" data-i18n-en="Chorus"></option><option value="17" data-i18n-zh="坦布拉" data-i18n-en="Tanpura"></option><option value="18" data-i18n-zh="自定义" data-i18n-en="Custom"></option>
               </select>
             </div>
             <div class="wg-field">
@@ -729,7 +743,7 @@
 
       <section class="wg-section" aria-labelledby="wg-ratio-title">
         <div class="wg-section-head">
-          <div><h2 id="wg-ratio-title" data-i18n-zh="Ratio 模式设定" data-i18n-en="Ratio Mode Profile"></h2><p class="wg-help" data-i18n-zh="三复音，每复音对应三个共鸣器" data-i18n-en="Three-voice polyphony, three resonators per voice"></p></div>
+          <div><h2 id="wg-ratio-title" data-i18n-zh="Ratio 模式设定" data-i18n-en="Ratio Mode Profile"></h2><p class="wg-help" data-i18n-zh="三复音，每复音对应三个共鸣器；自定义模式把九个比例用在同一个音上" data-i18n-en="Three-voice polyphony, three resonators per voice; Custom mode plays all nine ratios on one note"></p></div>
           <div class="wg-actions">
             <button id="wg-copy-slot1" class="wg-button" type="button" disabled data-i18n-zh="复制 Voice 1 到 Voice 2、3" data-i18n-en="Copy Voice 1 to Voices 2&amp;3"></button>
             <button id="wg-factory" class="wg-button" type="button" disabled data-i18n-zh="恢复出厂比例" data-i18n-en="Factory Ratio"></button>
@@ -751,6 +765,7 @@
           <div class="wg-field wg-field-third"><label for="wg-midi-both" data-i18n-zh="MIDI 双通道" data-i18n-en="MIDI Both Channel"></label><input id="wg-midi-both" class="wg-number" data-value-key="param:shared:midi_both" type="text" inputmode="numeric" disabled></div>
           <div class="wg-field wg-field-full"><label for="wg-mpe-enabled" data-i18n-zh="MPE 模式" data-i18n-en="MPE Mode"></label><select id="wg-mpe-enabled" class="wg-select" data-value-key="param:shared:mpe_enabled" disabled><option value="0" data-i18n-zh="关闭：三通道分立路由" data-i18n-en="Off: three-channel routing"></option><option value="1" data-i18n-zh="开启：标准 Lower Zone（Ch1 + Ch2–16，左右交替）" data-i18n-en="On: standard Lower Zone (Ch1 + Ch2-16, L/R alternating)"></option></select></div>
           <div class="wg-field wg-field-full"><label for="wg-line-input-mono" data-i18n-zh="线路输入" data-i18n-en="Line Input"></label><select id="wg-line-input-mono" class="wg-select" data-value-key="param:shared:line_input_mono" disabled><option value="0" data-i18n-zh="立体声：左右各自进入对应共鸣器" data-i18n-en="Stereo: each side feeds its resonator"></option><option value="1" data-i18n-zh="单声道：L+R 混合后进入左右共鸣器（仅线路；麦克风仍立体声）" data-i18n-en="Mono: L+R summed into both resonators (line only; mic stays stereo)"></option></select></div>
+          <div class="wg-field wg-field-full"><label id="wg-mode-cycle-label" data-i18n-zh="Mode 键循环的模式" data-i18n-en="Modes in the Mode Button Cycle"></label><div class="wg-mode-cycle" role="group" aria-labelledby="wg-mode-cycle-label"><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="0" disabled><span data-i18n-zh="复音" data-i18n-en="Poly"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="1" disabled><span data-i18n-zh="琴弦" data-i18n-en="String"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="2" disabled><span data-i18n-zh="音块" data-i18n-en="Bar"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="3" disabled><span data-i18n-zh="Cave" data-i18n-en="Cave"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="4" disabled><span data-i18n-zh="比率" data-i18n-en="Ratio"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="5" disabled><span data-i18n-zh="钢琴弦" data-i18n-en="Piano"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="6" disabled><span data-i18n-zh="管" data-i18n-en="Tube"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="7" disabled><span data-i18n-zh="鼓膜" data-i18n-en="Membrane"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="8" disabled><span data-i18n-zh="钟" data-i18n-en="Bell"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="9" disabled><span data-i18n-zh="玻璃" data-i18n-en="Glass"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="10" disabled><span data-i18n-zh="锣" data-i18n-en="Gong"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="11" disabled><span data-i18n-zh="板" data-i18n-en="Plate"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="12" disabled><span data-i18n-zh="五度" data-i18n-en="Fifths"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="13" disabled><span data-i18n-zh="大九和弦" data-i18n-en="Major 9"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="14" disabled><span data-i18n-zh="小十一和弦" data-i18n-en="Minor 11"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="15" disabled><span data-i18n-zh="空气" data-i18n-en="Air"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="16" disabled><span data-i18n-zh="合唱" data-i18n-en="Chorus"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="17" disabled><span data-i18n-zh="坦布拉" data-i18n-en="Tanpura"></span></label><label class="wg-cycle-mode"><input type="checkbox" data-mode-cycle-bit="18" disabled><span data-i18n-zh="自定义" data-i18n-en="Custom"></span></label></div><span class="wg-help" data-i18n-zh="至少保留一个；MIDI CC 9（值 = 模式编号）与上方选择可直接选任何模式" data-i18n-en="Keep at least one; MIDI CC 9 (value = mode number) and the selectors above reach any mode"></span></div>
           <div class="wg-field wg-field-full"><label for="wg-looper-latch" data-i18n-zh="Looper 锁定" data-i18n-en="Looper Latch"></label><select id="wg-looper-latch" class="wg-select" data-value-key="param:shared:looper_latch" disabled><option value="0" data-i18n-zh="关闭：按住两个 Mode 键使用 looper 层" data-i18n-en="Off: hold both Mode buttons for the looper layer"></option><option value="1" data-i18n-zh="开启：轻按两个 Mode 键锁定/解锁 looper 层" data-i18n-en="On: tap both Mode buttons to lock or unlock the looper layer"></option></select></div>
           <div class="wg-field wg-field-full"><label for="wg-looper-live-input" data-i18n-zh="Looper 播放时的实时输入" data-i18n-en="Live Input During Loop Playback"></label><select id="wg-looper-live-input" class="wg-select" data-value-key="param:shared:looper_live_input" disabled><option value="0" data-i18n-zh="关闭：播放时 loop 取代实时输入" data-i18n-en="Off: the playing loop replaces the live input"></option><option value="1" data-i18n-zh="开启：实时输入以 -6 dB 与 loop 一起播放" data-i18n-en="On: the live input plays along with the loop at -6 dB"></option></select></div>
         </div>
@@ -825,7 +840,8 @@
         "param:shared:mpe_enabled": {target: "shared", name: "mpe_enabled", path: ["shared", "mpe_enabled"], min: 0, max: 1, step: 1, immediate: true},
         "param:shared:line_input_mono": {target: "shared", name: "line_input_mono", path: ["shared", "line_input_mono"], min: 0, max: 1, step: 1, immediate: true},
         "param:shared:looper_latch": {target: "shared", name: "looper_latch", path: ["shared", "looper_latch"], min: 0, max: 1, step: 1, immediate: true},
-        "param:shared:looper_live_input": {target: "shared", name: "looper_live_input", path: ["shared", "looper_live_input"], min: 0, max: 1, step: 1, immediate: true}
+        "param:shared:looper_live_input": {target: "shared", name: "looper_live_input", path: ["shared", "looper_live_input"], min: 0, max: 1, step: 1, immediate: true},
+        "param:shared:mode_cycle": {target: "shared", name: "mode_cycle", path: ["shared", "mode_cycle"], min: 1, max: 31, step: 1, immediate: true}
       };
 
       const state = {
@@ -1440,6 +1456,21 @@
           if (document.activeElement !== control || control.tagName === "SELECT") control.value = value;
           control.disabled = !state.connected || !state.settings || state.saving || state.refreshing || unsupported || (midiChannelKey && mpeOn);
         });
+        // Modes past the firmware's limit (older firmware stops at Ratio) stay hidden.
+        if (spec.name === "mode") {
+          root.querySelectorAll(`[data-value-key="${key}"] option`).forEach((option) => {
+            option.hidden = Number(option.value) > spec.max;
+          });
+        }
+        if (key === "param:shared:mode_cycle") {
+          const mask = Number(value);
+          root.querySelectorAll("[data-mode-cycle-bit]").forEach((box) => {
+            const bit = Number(box.dataset.modeCycleBit);
+            box.closest(".wg-cycle-mode").hidden = (1 << bit) > spec.max;
+            box.checked = Number.isFinite(mask) && Boolean(mask & (1 << bit));
+            box.disabled = !state.connected || !state.settings || state.saving || state.refreshing || unsupported;
+          });
+        }
         root.querySelectorAll(`[data-range-key="${key}"]`).forEach((control) => {
           control.min = spec.min;
           control.max = spec.max;
@@ -2035,6 +2066,21 @@
         if (!parameterSpecs[key]) return;
         const handler = () => scheduleParameter(key, control.value, document.activeElement === control, control.tagName === "SELECT");
         control.addEventListener(control.tagName === "SELECT" ? "change" : "input", handler);
+      });
+
+      // The cycle needs at least one mode: unchecking the last one is undone.
+      root.querySelectorAll("[data-mode-cycle-bit]").forEach((box) => {
+        box.addEventListener("change", () => {
+          let mask = 0;
+          root.querySelectorAll("[data-mode-cycle-bit]").forEach((other) => {
+            if (other.checked) mask |= 1 << Number(other.dataset.modeCycleBit);
+          });
+          if (!mask) {
+            box.checked = true;
+            return;
+          }
+          scheduleParameter("param:shared:mode_cycle", mask, false, true);
+        });
       });
 
       root.querySelectorAll("[data-range-key]").forEach((control) => {

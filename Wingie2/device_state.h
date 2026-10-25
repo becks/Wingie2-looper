@@ -48,6 +48,7 @@ enum SettingsDirtyIndex {
   kDirtyRightPan,
   kDirtyLooperLatch,
   kDirtyLooperLiveInput,
+  kDirtyModeCycle,
   kDirtyCount
 };
 

@@ -24,7 +24,10 @@ static const float kA3FrequencyStep = 0.01f;
 // set_param 整数参数范围（get_settings limits 单一真值；与 Wingie2.ino 枚举的
 // 一致性由 serial_config.ino 的 static_assert 锁定，消除网页端双份维护）
 static const int kModeMin = 0;              // POLY_MODE
-static const int kModeMax = 4;              // RATIO_MODE
+static const int kModeMax = 18;             // CUSTOM_MODE (LAST_MODE)
+// mode_cycle: bit n puts mode n in the Mode button cycle; at least one bit set.
+static const int kModeCycleMin = 1;
+static const int kModeCycleMax = (1 << (kModeMax + 1)) - 1;
 static const int kTuningMin = -1;
 static const int kTuningMax = 7;
 static const int kMidiChannelMin = 1;

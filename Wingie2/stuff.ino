@@ -1,5 +1,5 @@
 // 通用设置保存项表：key（NVS 键名）、类型（0=UChar, 1=Float, 2=Bool,
-// 3=Float 存 offset）、dirty 索引、成功后的 Serial 输出格式、取值地址（volatile 兼容）。
+// 3=Float 存 offset, 4=UInt）、dirty 索引、成功后的 Serial 输出格式、取值地址（volatile 兼容）。
 // 输出格式逐字保留历史格式，表序即保存/打印顺序。
 struct GeneralSettingEntry {
   const char *key;
@@ -14,6 +14,7 @@ enum GeneralSettingType {
   kSettingFloat = 1,
   kSettingBool = 2,
   kSettingA3Offset = 3,
+  kSettingUInt = 4,
 };
 
 static const GeneralSettingEntry kGeneralSettings[kDirtyCount] = {
@@ -33,6 +34,7 @@ static const GeneralSettingEntry kGeneralSettings[kDirtyCount] = {
   {"right_pan", kSettingFloat, kDirtyRightPan, "%s is saved, value is %.4f\n", &pan[1]},
   {"looper_latch", kSettingBool, kDirtyLooperLatch, "%s is saved, value is %d.\n", &looper_latch},
   {"looper_live_input", kSettingBool, kDirtyLooperLiveInput, "%s is saved, value is %d.\n", &looper_live_input},
+  {"mode_cycle", kSettingUInt, kDirtyModeCycle, "%s is saved, value is 0x%05lx.\n", &mode_cycle},
 };
 
 bool save_general_preferences(Preferences &store) {
@@ -57,6 +59,12 @@ bool save_general_preferences(Preferences &store) {
       case kSettingBool: {
         const bool value = *static_cast<const volatile bool *>(entry.value);
         entrySaved = store.putBool(entry.key, value);
+        if (entrySaved) Serial.printf(entry.format, entry.key, value);
+        break;
+      }
+      case kSettingUInt: {
+        const unsigned long value = *static_cast<const volatile uint32_t *>(entry.value);
+        entrySaved = store.putUInt(entry.key, value);
         if (entrySaved) Serial.printf(entry.format, entry.key, value);
         break;
       }

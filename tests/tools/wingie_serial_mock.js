@@ -31,7 +31,8 @@
       mpe_enabled: false,
       line_input_mono: false,
       looper_latch: false,
-      looper_live_input: false
+      looper_live_input: false,
+      mode_cycle: 31
     }
   };
 
@@ -71,12 +72,12 @@
 
   const parameterRanges = {
     left: {
-      mode: [0, 4, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
+      mode: [0, 18, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
       volume: [0, 1, 0.001, false], threshold: [0.0825, 0.99, 0.0825, true],
       pan: [0, 1, 0.01, true]
     },
     right: {
-      mode: [0, 4, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
+      mode: [0, 18, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
       volume: [0, 1, 0.001, false], threshold: [0.0825, 0.99, 0.0825, true],
       pan: [0, 1, 0.01, true]
     },
@@ -87,7 +88,8 @@
       mpe_enabled: [0, 1, 1, true],
       line_input_mono: [0, 1, 1, true],
       looper_latch: [0, 1, 1, true],
-      looper_live_input: [0, 1, 1, true]
+      looper_live_input: [0, 1, 1, true],
+      mode_cycle: [1, 524287, 1, true]
     }
   };
 
