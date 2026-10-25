@@ -42,7 +42,7 @@ the loop by itself.
 
 Recorded keys are replayed at the current octave, so the octave selector transposes
 a running sequence. They follow the side's current mode: Poly and Ratio cycle voices,
-String and Bar set the note without changing the tap sequence, and Cave mode neither
+String, Bar and the other pitched resonator modes set the note without changing the tap sequence, and Cave mode neither
 records nor replays keys (its keys edit resonator mutes). Only panel keys are recorded,
 not incoming MIDI notes, and sequences are lost at power-off. The note and audio loopers
 run independently and are not synchronized.
@@ -105,7 +105,8 @@ synchronization, audio persistence, or automatic pitch modulation.
 
 `Tools/loop_monitor.html` shows both loopers live over USB serial (`loop_status`): audio
 loop waveform, position, length, speed, level, direction and SOS, the note loop, panel
-keys and controls, the looper latch (`latch` 0–2 in `loop_status`: off, on, on and locked), live input during playback (`live` 0/1), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Pan and
+keys and controls, the looper latch (`latch` 0–2 in `loop_status`: off, on, on and locked), live input during playback (`live` 0/1), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Mode select (`set_param` `mode`, 0–18; options above 4 hidden
+without the `resonator_modes` capability in `hello`), Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
 (`set_param` `speed_step`, 0–7), and the Looper latch and Live input in playback checkboxes
 (shared `looper_latch` and `looper_live_input`), written with `set_param`. Open it from disk in desktop Chrome or Edge.
@@ -114,7 +115,7 @@ later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`
 latch v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`) and live input
 v4.30-duallooper.9 or later (hidden without `live`); the rest works from v4.30-duallooper.5.
 The looper latch itself (boot B+B, the configuration page field) is new in v4.30-duallooper.8,
-live input during playback in v4.30-duallooper.9.
+live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-duallooper.10.
 
 ## CPU headroom
 
