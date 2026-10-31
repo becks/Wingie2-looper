@@ -196,6 +196,14 @@ unsigned long looperFullTimer[2] = {0, 0};
 // Short per-side flash each time a playing loop restarts.
 bool looperWrapFlash[2] = {false, false};
 unsigned long looperWrapTimer[2] = {0, 0};
+// C# or G# held in the looper layer toggles gate mode or the loop position (-1 none);
+// G# restores the level its press stepped down.
+int8_t looperToggleKey[2] = {-1, -1};
+unsigned long looperToggleStarted[2] = {0, 0};
+uint8_t looperToggleLevel[2] = {127, 127};
+// Panel keys holding each side's looper gate open, and whether the note looper does.
+uint16_t looperGateKeys[2] = {0, 0};
+bool noteLoopGate[2] = {false, false};
 // Panel key loopers (A in the looper layer); played from the control task.
 wingie_loop::NoteLoop noteLoop[2];
 bool noteLoopClearArmed[2] = {false, false};
@@ -330,6 +338,7 @@ byte led_flash_color = 0, led_blink = 0, led_blink_color = ledColor[POLY_MODE];
 #define SAVE_DELAY 3000
 #define LOOPER_CLEAR_HOLD_MS 1000
 #define LOOPER_OCTAVE_HOLD_MS 500
+#define LOOPER_TOGGLE_HOLD_MS 500
 #define LOOPER_LATCH_FLASH_INTERVAL 1200  // latched layer: a short flash this often
 #define LOOPER_LATCH_FLASH_MS 120
 #define LOOPER_FULL_BLINK_STEPS 7  // six 125 ms colour steps, then restore the mode colour

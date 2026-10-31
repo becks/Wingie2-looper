@@ -44,6 +44,11 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     led_blink_color = ledColor[colors[keyIndex]];
     led_flash_timer = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u command=%s\n", ch + 1, names[keyIndex]);
+    // C# still plays at once; held, it also toggles gate mode.
+    if (keyIndex == 1) {
+      looperToggleKey[ch] = keyIndex;
+      looperToggleStarted[ch] = currentMillis;
+    }
   } else if (keyIndex == 4) {
     looperClearArmed[ch] = true;
     looperClearStarted[ch] = currentMillis;
@@ -52,6 +57,12 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     looperSpeedKey[ch] = keyIndex;
     looperSpeedStarted[ch] = currentMillis;
   } else if (keyIndex == 8 || keyIndex == 10) {  // G# down, A#/Bb up
+    // Held, G# undoes its level step and moves the loop before/after the resonator.
+    if (keyIndex == 8) {
+      looperToggleKey[ch] = keyIndex;
+      looperToggleStarted[ch] = currentMillis;
+      looperToggleLevel[ch] = looperLevel[ch];
+    }
     int level = looperLevel[ch] + (keyIndex == 8 ? -8 : 8);
     looperLevel[ch] = constrain(level, 0, 127);
     dsp.setLooperControl(ch, 82, looperLevel[ch]);
@@ -120,6 +131,10 @@ void noteLoopRecordKey(byte ch, byte keyIndex) {
 // Replays a recorded panel key at the current octave, without touching the
 // String/Bar tap sequence that live presses build.
 void playRecordedKey(byte ch, byte keyIndex) {
+  if (Mode[ch] != CAVE_MODE) {
+    noteLoopGate[ch] = true;
+    dsp.looperGateNote(ch, wingie_loop::kGateNoteLoop, true);
+  }
   if (wingie_modes::isPitchedMono(Mode[ch])) {
     note[ch] = keyIndex;
     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
@@ -812,6 +827,12 @@ void control(void *pvParameters) {
 
                 noteLoopRecordKey(ch, i);
 
+                // Cave keys edit mutes, so they leave the looper gate alone.
+                if (Mode[ch] != CAVE_MODE) {
+                  looperGateKeys[ch] |= 1 << i;
+                  dsp.looperGateNote(ch, wingie_loop::kGatePanel, true);
+                }
+
                 if (firstPress[ch]) {
                   firstPress[ch] = false;
 
@@ -874,6 +895,10 @@ void control(void *pvParameters) {
 
             else {  // Key Release Action Start
               if (i == 4) looperClearArmed[ch] = false;
+              if (looperGateKeys[ch] & (1 << i)) {
+                looperGateKeys[ch] &= ~(1 << i);
+                if (!looperGateKeys[ch]) dsp.looperGateNote(ch, wingie_loop::kGatePanel, false);
+              }
               if (i == 9) noteLoopClearArmed[ch] = false;
               if (!allKeys[ch]) firstPress[ch] = true;
               //if (!ch) dsp.setParamValue("/Wingie/left/mode_changed", 0);
@@ -934,6 +959,37 @@ void control(void *pvParameters) {
       applyLooperPanelSpeed(ch, speed, held);
     }
 
+    // C# / G# held half a second: toggle gate mode / loop position. The press
+    // already played (C#) or stepped the level (G#, restored here).
+    for (int ch = 0; ch < 2; ch++) {
+      int toggleKey = looperToggleKey[ch];
+      if (toggleKey < 0) continue;
+      if (!looperLayerActive() || key[ch][toggleKey]) {
+        looperToggleKey[ch] = -1;
+        continue;
+      }
+      if (currentMillis - looperToggleStarted[ch] < LOOPER_TOGGLE_HOLD_MS) continue;
+      looperToggleKey[ch] = -1;
+      wingie_loop::LoopView view;
+      dsp.looperView(ch, view);
+      bool on;
+      if (toggleKey == 1) {
+        on = !view.gate;
+        dsp.setLooperGateMode(ch, on);
+        led_blink_color = ledColor[on ? 2 : 0];  // red gate on, white off
+        Serial.printf("LOOPER_PANEL ch=%u gate=%s\n", ch + 1, on ? "on" : "off");
+      } else {
+        looperLevel[ch] = looperToggleLevel[ch];
+        dsp.setLooperControl(ch, 82, looperLevel[ch]);
+        on = !view.post;
+        dsp.setLooperPost(ch, on);
+        led_blink_color = ledColor[on ? 3 : 1];  // purple after the resonator, yellow before
+        Serial.printf("LOOPER_PANEL ch=%u position=%s\n", ch + 1, on ? "post" : "pre");
+      }
+      led_blink = 6;
+      led_flash_timer = currentMillis;
+    }
+
     for (int ch = 0; ch < 2; ch++) {
       if (noteLoopClearArmed[ch]) {
         if (!looperLayerActive() || key[ch][9]) {
@@ -949,6 +1005,11 @@ void control(void *pvParameters) {
       }
       uint8_t recordedKey;
       while (noteLoop[ch].next(currentMillis, recordedKey)) playRecordedKey(ch, recordedKey);
+      // Replayed keys have no releases: the gate stays open while the sequence plays.
+      if (noteLoopGate[ch] && noteLoop[ch].state() != wingie_loop::NoteLoop::kPlaying) {
+        noteLoopGate[ch] = false;
+        dsp.looperGateNote(ch, wingie_loop::kGateNoteLoop, false);
+      }
     }
 
     //

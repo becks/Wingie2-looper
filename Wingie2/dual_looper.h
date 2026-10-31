@@ -10,6 +10,8 @@
 #pragma GCC optimize("O2")
 #endif
 namespace wingie_loop {
+// What holds a side's gate open (bits): panel keys, MIDI notes, the note looper.
+enum GateSource : uint8_t { kGatePanel = 1, kGateMidi = 2, kGateNoteLoop = 4 };
 // Display snapshot of one audio loop for the Loop Monitor.
 struct LoopView {
   int state = 0;
@@ -17,6 +19,7 @@ struct LoopView {
   float speed = 1, level = 1, retention = 0.8f;
   bool reverse = false;
   int speedMode = 0;  // wingie_loop::SpeedMode
+  bool post = false, gate = false;
 };
 class Loop {
 public:
@@ -80,6 +83,13 @@ private:
   float retention_ = 0.8f;
   // Live input mixed into playback (0 = the loop replaces it); overdub always uses -6 dB.
   float liveInput_ = 0;
+  // After the resonator the input is the resonator output, which always passes at unity.
+  bool post_ = false;
+  // Gate mode: playback is heard only while the gate is open, and a trigger
+  // restarts the loop once the gate has faded out (~2 ms), so retriggers do not click.
+  static constexpr float kGateRate = 0.05f, kGateFloor = 0.01f;
+  bool gateMode_ = false, gateOpen_ = false, restart_ = false;
+  float gate_ = 1;
   // Decoded neighbours of the current frame; they change only every ~9 samples.
   static constexpr size_t kNoCache = ~size_t(0);
   size_t cachedIndex_ = kNoCache;
@@ -140,6 +150,8 @@ private:
   template <bool kReverse, bool kGrains>
   void processBlock(const float* input, float* output, int n, float step, float level,
                     float retention, const float* feedback, float cross, float pitch) {
+    bool restart = restart_;
+    restart_ = false;
     if (!capacity_ || state_ == 0) {
       for (int k = 0; k < n; ++k) output[k] = input[k];
       return;
@@ -166,7 +178,12 @@ private:
     size_t position = position_, cached = cachedIndex_;
     float fraction = fraction_, smooth = smooth_, a = cachedA_, b = cachedB_;
     if (overdub) retention_ = retention;
-    const float inputGain = overdub ? 0.5f : liveInput_;
+    const float inputGain = post_ ? 1.0f : overdub ? 0.5f : liveInput_;
+    // The gate applies to playback only: overdub always lets the loop be heard.
+    const bool gating = gateMode_ && state_ == 2;
+    const float gateTarget = gating && !gateOpen_ ? 0.0f : 1.0f;
+    restart = restart && gating;
+    float gate = gate_;
     // Grains need room for two of them inside the loop.
     const float width = length / 2 < kGrainFrames ? length / 2 : kGrainFrames;
     const bool grains = kGrains && width >= 4;
@@ -262,13 +279,29 @@ private:
         grain = next;
       }
       smooth += 0.02f * (level - smooth);
+      gate += kGateRate * ((restart ? 0.0f : gateTarget) - gate);
       // During overdub (and playback with live input on), let the player hear the
       // input as well as the existing loop. -6 dB keeps their combined drive controlled.
-      output[k] = sample * smooth + input[k] * inputGain;
+      output[k] = sample * smooth * gate + input[k] * inputGain;
+      if (restart && gate < kGateFloor) {
+        // Silent now: jump to the loop start (the end in reverse) and re-place the grains.
+        restart = false;
+        position = kReverse ? length - 1 : 0;
+        fraction = kReverse ? 0.9999f : 0;
+        cached = kNoCache;
+        if (grains) {
+          grain = 0;
+          place(head0, position, fraction, 0, lengthFx);
+          place(head1, position, fraction, halfFx, lengthFx);
+          head0.cached = head1.cached = kNoCache;
+        }
+      }
     }
+    restart_ = restart;
     position_ = position;
     fraction_ = fraction;
     smooth_ = smooth;
+    gate_ = gate;
     grain_ = grain;
     grainSkip_ = grainSkip;
     grainLast_ = grainLast;
@@ -319,8 +352,15 @@ public:
   // 0 bypass, 1 replace-record, 2 play, 3 overdub, 4 clear.
   // Audio task only: hear the live input at -6 dB during playback too.
   void setLiveInput(bool on) { liveInput_ = on ? 0.5f : 0; }
+  // Audio task only: the loop sits after the resonator, so the input passes at unity.
+  void setPost(bool on) { post_ = on; }
+  // Audio task only: gate mode and whether a key or note holds the gate open.
+  void setGate(bool mode, bool open) { gateMode_ = mode; gateOpen_ = open; }
+  // Audio task only: in gate mode, restart playback from the loop start.
+  void retrigger() { restart_ = true; }
   void command(int value) {
     if (!capacity_) return;
+    restart_ = false;
     cachedIndex_ = kNoCache;
     headsPlaced_ = false;
     if (value == 4) {

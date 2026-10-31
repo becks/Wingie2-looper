@@ -14395,6 +14395,18 @@ void Wingie2::setLooperLiveInput(bool on) {
     static_cast<LooperDSP*>(fDSP)->setLiveInput(on);
 }
 
+void Wingie2::setLooperPost(int ch, bool on) {
+    static_cast<LooperDSP*>(fDSP)->setPost(ch, on);
+}
+
+void Wingie2::setLooperGateMode(int ch, bool on) {
+    static_cast<LooperDSP*>(fDSP)->setGateMode(ch, on);
+}
+
+void Wingie2::looperGateNote(int ch, uint8_t source, bool on) {
+    static_cast<LooperDSP*>(fDSP)->gateNote(ch, source, on);
+}
+
 bool Wingie2::takeLooperFilled(int ch) {
     return static_cast<LooperDSP*>(fDSP)->takeFilled(ch);
 }
