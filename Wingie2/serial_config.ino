@@ -241,6 +241,29 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Looper state, as MIDI CC 80: 0 bypass/stop (loop kept), 1 new recording,
+    // 2 playback, 3 overdub, 4 clear. Applied by the audio task on its next block.
+    // Out-of-range values are refused rather than clamped: a clamp would turn
+    // any value above 4 into a clear.
+    if (strcmp(request.name, "looper_state") == 0) {
+      if (!isfinite(request.value) || request.value < -0.5f || request.value > 4.5f) return false;
+      const int state = static_cast<int>(lroundf(request.value));
+      dsp.setLooperControl(ch, 80, state);
+      canonical = state;
+      return true;
+    }
+
+    // Loop level, as MIDI CC 82: 0-1 in 1/127 steps. Kept in looperLevel[] so the
+    // panel's G#/A# level steps continue from it. Runtime only.
+    if (strcmp(request.name, "looper_level") == 0) {
+      if (!isfinite(request.value)) return false;
+      const float level = request.value < 0 ? 0 : (request.value > 1 ? 1 : request.value);
+      looperLevel[ch] = static_cast<uint8_t>(lroundf(level * 127));
+      dsp.setLooperControl(ch, 82, looperLevel[ch]);
+      canonical = looperLevel[ch] / 127.0f;
+      return true;
+    }
+
     // Looper sound on sound (as MIDI CC 83): runtime only, back to 80% at power-on.
     if (strcmp(request.name, "sos") == 0) {
       if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.01f, canonical)) return false;
@@ -263,6 +286,18 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       if (!quantizeIntegerParameter(request.value, 0, wingie_loop::kSpeedModeCount - 1, mode)) return false;
       dsp.setLooperSpeedMode(ch, mode);
       canonical = mode;
+      return true;
+    }
+
+    // Looper before (0) or after (1) the resonator, as MIDI CC 88. Runtime only.
+    // Gate mode (1: keys and notes play the loop from its start), as MIDI CC 89.
+    const bool post = strcmp(request.name, "looper_post") == 0;
+    if (post || strcmp(request.name, "looper_gate") == 0) {
+      int enabled;
+      if (!quantizeIntegerParameter(request.value, 0, 1, enabled)) return false;
+      if (post) dsp.setLooperPost(ch, enabled);
+      else dsp.setLooperGateMode(ch, enabled);
+      canonical = enabled;
       return true;
     }
 
@@ -550,6 +585,8 @@ void sendLoopStatus(uint32_t id) {
     side.reverse = view.reverse;
     side.retention = view.retention;
     side.speedMode = view.speedMode;
+    side.post = view.post;
+    side.gate = view.gate;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();

@@ -17,13 +17,13 @@ Hold both Mode buttons, then press a key on the side whose looper you want to co
 | Key | Action |
 |---|---|
 | C | Audio: record |
-| C# | Audio: play |
+| C# | Audio: play; hold ½ s: gate mode on/off |
 | D | Audio: overdub |
 | D# | Audio: bypass (keeps the loop) |
 | Hold E (1 s) | Audio: clear the loop |
 | F / G | Audio: speed one step down / up (4th, 5th, octave); hold ½ s: an octave |
 | F# | Audio: speed 1×; hold ½ s: speed mode varispeed → pitch → stretch |
-| G# | Audio: loop level − |
+| G# | Audio: loop level −; hold ½ s: loop before / after the resonator |
 | **A** | **Notes: record → close and play → stop → play** |
 | **Hold A (1 s)** | **Notes: clear the sequence** |
 | A#/B♭ | Audio: loop level + |
@@ -61,6 +61,27 @@ stretch use short grains (~65 ms), so they sound slightly granular, most of all 
 down. Overdub records at the play position in every mode. The mode returns to varispeed at
 power-on.
 
+**Before or after the resonator.** Holding G# for half a second (six LED blinks: yellow
+before, purple after; the level step of the press is undone) moves that side's audio loop.
+**Before** (the default) the loop feeds the resonator, as always. **After**, the loop records
+and plays the side's output: the resonator keeps sounding the live input at full level and the
+loop plays on top, so you can freeze a resonated chord, change mode or notes and play over it.
+The loop stores audio at about 4.9 kHz, so a loop recorded after the resonator sounds darker
+than the resonator itself. After the resonator the loop takes that side's output channel as it
+leaves the pan, so with a non-default pan it records the stereo mix of that channel.
+
+**Gate mode.** Holding C# for half a second (six LED blinks: red on, white off; the press
+still starts playback) turns on that side's gate: the playing loop is silent until a note key
+or a MIDI note on the side's channel is held, and each new key or note restarts it from the
+beginning (from the end in reverse) after a ~2 ms fade, so retriggers do not click. Releasing
+every key closes the gate. Before the resonator, the key also sets the resonator note, so the
+loop becomes the exciter of the note you play; after it, the loop is a sample you trigger.
+Keys replayed by the note looper restart the loop too, and keep the gate open while the
+sequence plays. Overdub ignores the gate. Cave keys edit mutes and do not trigger it.
+
+Both settings are also available as MIDI CC 88 and 89 and in the Loop Monitor, and return to
+before the resonator with the gate off at power-on.
+
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 
@@ -80,6 +101,25 @@ desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the
 monitor, the configuration page or the web flasher. Requires firmware v4.30-duallooper.5 or later; the
 looper latch needs v4.30-duallooper.8 or later and live input v4.30-duallooper.9 or later
 (hidden on older firmware).
+
+## norns
+
+[`Tools/norns/wingie_monitor`](Tools/norns/wingie_monitor) is a [norns](https://monome.org/docs/norns/)
+script that shows both loopers on the norns screen and drives them from its keys and
+encoders over the Wingie2's USB serial port (one USB cable, no MIDI interface): record,
+play, overdub and stop, speed and loop level, plus every Loop Monitor control, the note
+loops, the panel state and the input/output meters. It needs norns 250926 or later (with
+the `serial` module) and firmware v4.30-duallooper.11 or later for the transport and loop
+level. To install it, paste this line in the maiden REPL (norns.local in a browser):
+
+```lua
+os.execute("rm -rf /tmp/wl && git clone -q --depth 1 https://github.com/becks/Wingie2-looper /tmp/wl && rm -rf /home/we/dust/code/wingie_monitor && cp -r /tmp/wl/Tools/norns/wingie_monitor /home/we/dust/code/ && rm -rf /tmp/wl && sync")
+```
+
+then load `wingie_monitor` from SELECT and connect the Wingie2 to a norns USB port with a data
+cable. norns powers the Wingie2 over USB: use a norns supply that holds 5.1 V / 3 A, or
+norns may reboot when the Wingie2 is plugged or unplugged. Pages, controls and
+troubleshooting: [`Tools/norns/wingie_monitor/README.md`](Tools/norns/wingie_monitor/README.md).
 
 ## Resonator modes
 

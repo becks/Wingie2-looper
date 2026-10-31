@@ -2,6 +2,24 @@
 
 void apply_note_profiles_to_dsp();
 void set_alt_tuning(int index, bool persist_backup);
+void release_note(byte channel, byte pitch);
+
+// MIDI notes held on each side's conventional channels, for the looper gate.
+uint32_t midiGateNotes[2][4] = {};
+
+void midiGateNote(byte ch, byte pitch, bool on) {
+  uint32_t &word = midiGateNotes[ch][(pitch >> 5) & 3];
+  const uint32_t bit = 1u << (pitch & 31);
+  if (on) {
+    word |= bit;
+    dsp.looperGateNote(ch, wingie_loop::kGateMidi, true);
+    return;
+  }
+  if (!(word & bit)) return;
+  word &= ~bit;
+  const uint32_t *notes = midiGateNotes[ch];
+  if (!(notes[0] | notes[1] | notes[2] | notes[3])) dsp.looperGateNote(ch, wingie_loop::kGateMidi, false);
+}
 
 void handleNoteOn (byte channel, byte pitch, byte velocity) {
 #if MIDI_DIAGNOSTICS
@@ -11,17 +29,18 @@ void handleNoteOn (byte channel, byte pitch, byte velocity) {
   //if (pitch < 96) {
 
   if (!velocity) {  // Note On velocity 0 按 MIDI 规范等价 Note Off
-    handle_mpe_note_off(channel, pitch);
+    release_note(channel, pitch);
     return;
   }
 
   if (handle_mpe_note_on(channel, pitch)) return;
 
-  if (channel == midi_ch_l) MIDISetPitch(0, Mode[0], pitch, channel);
-  if (channel == midi_ch_r) MIDISetPitch(1, Mode[1], pitch, channel);
+  if (channel == midi_ch_l) { MIDISetPitch(0, Mode[0], pitch, channel); midiGateNote(0, pitch, true); }
+  if (channel == midi_ch_r) { MIDISetPitch(1, Mode[1], pitch, channel); midiGateNote(1, pitch, true); }
 
   if (channel == midi_ch_both) {
     MIDISetPitch(polyFlip, Mode[polyFlip], pitch, channel);
+    midiGateNote(polyFlip, pitch, true);
     polyFlip = !polyFlip;
   }
 
@@ -32,7 +51,14 @@ void handleNoteOff(byte channel, byte pitch, byte velocity) {
 #if MIDI_DIAGNOSTICS
   recordMidiNoteOff(channel, pitch, velocity);
 #endif
+  release_note(channel, pitch);
+}
+
+void release_note(byte channel, byte pitch) {
   handle_mpe_note_off(channel, pitch);
+  // The Both channel alternates sides, so its release may belong to either.
+  if (channel == midi_ch_l || channel == midi_ch_both) midiGateNote(0, pitch, false);
+  if (channel == midi_ch_r || channel == midi_ch_both) midiGateNote(1, pitch, false);
 }
 
 void MIDISetPitch(int ch, int mode, int pitch, byte channel) {
@@ -140,7 +166,7 @@ void handleControlChange (byte channel, byte number, byte value) {
 }
 
 void MIDISetParam(int ch, byte number, byte value) {
-  if (number >= 80 && number <= 87) {
+  if (number >= 80 && number <= 89) {
     dsp.setLooperControl(ch, number, value);
     return;
   }

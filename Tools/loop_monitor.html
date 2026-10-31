@@ -265,14 +265,14 @@
       <p>Hold both Mode buttons, then press a key on the side whose looper you want to control.</p>
       <div class="combo-grid">
         <div class="combo"><kbd>C</kbd><span>Audio: record</span></div>
-        <div class="combo"><kbd>C#</kbd><span>Audio: play</span></div>
+        <div class="combo"><kbd>C#</kbd><span>Audio: play; hold ½ s: gate mode on/off (keys and notes play the loop from its start)</span></div>
         <div class="combo"><kbd>D</kbd><span>Audio: overdub</span></div>
         <div class="combo"><kbd>D#</kbd><span>Audio: bypass (keeps the loop)</span></div>
         <div class="combo"><kbd>Hold E</kbd><span>Audio: clear the loop (1 s)</span></div>
         <div class="combo"><kbd>F</kbd><span>Audio: speed down one step (4th, 5th, octave); hold ½ s: octave down</span></div>
         <div class="combo"><kbd>F#</kbd><span>Audio: speed 1×; hold ½ s: cycle varispeed → pitch (length kept) → stretch (pitch kept)</span></div>
         <div class="combo"><kbd>G</kbd><span>Audio: speed up one step (4th, 5th, octave); hold ½ s: octave up</span></div>
-        <div class="combo"><kbd>G#</kbd><span>Audio: loop level −</span></div>
+        <div class="combo"><kbd>G#</kbd><span>Audio: loop level −; hold ½ s: loop before/after the resonator (level kept)</span></div>
         <div class="combo notes"><kbd>A</kbd><span>Notes: record → close and play → stop → play</span></div>
         <div class="combo notes"><kbd>Hold A</kbd><span>Notes: clear the sequence (1 s)</span></div>
         <div class="combo"><kbd>A#</kbd><span>Audio: loop level +</span></div>
@@ -286,12 +286,12 @@
         mode (not in Cave mode).</p>
     </section>
     <footer>
-      View over USB (Web Serial, Chrome or Edge). The only controls are each side's mode, Pan, SOS and
-      speed steps: mode and Pan change the running state (save them from the configuration page or by holding
-      both Mode buttons for 3 s); SOS and speed are not saved (SOS returns to 80%, speed to 1× at
-      power-on). Close the page before using the Arduino serial monitor or the web flasher. Requires
+      View over USB (Web Serial, Chrome or Edge). The only controls are each side's mode, Pan, SOS,
+      speed steps and the After resonator / Gate toggles: mode and Pan change the running state (save them from the configuration page or by holding
+      both Mode buttons for 3 s); SOS, speed and the toggles are not saved (SOS returns to 80%, speed to 1×,
+      the loop to before the resonator with the gate off at power-on). Close the page before using the Arduino serial monitor or the web flasher. Requires
       firmware v4.30-duallooper.5 or later; Pan and SOS need v4.30-duallooper.6 or later, the speed
-      steps v4.30-duallooper.7 or later.
+      steps v4.30-duallooper.7 or later, the toggles v4.30-duallooper.11 or later.
     </footer>
   </main>
 
@@ -316,6 +316,7 @@
           <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
         <div class="speed-steps" data-speed-steps hidden role="group" aria-label="Speed steps" title="Speed in pure-ratio steps (MIDI CC 86). Speed also changes pitch and loop duration."></div>
+        <div class="speed-steps" data-routing hidden role="group" aria-label="Loop routing"></div>
       </section>
       <section>
         <h3>Note loop <span class="badge empty" data-notes-state>EMPTY</span></h3>
@@ -393,6 +394,13 @@
       {label: "Pitch", title: "Pitch only: the loop keeps its length"},
       {label: "Stretch", title: "Tempo only: the loop keeps its pitch"},
     ];
+    // Per-side looper toggles (set_param, runtime only): loop position and gate mode.
+    const ROUTING = [
+      {key: "post", name: "looper_post", label: "After resonator",
+       title: "Record and play the resonator output instead of feeding the loop into the resonator (MIDI CC 88; panel: hold both Mode buttons and G#). Back to before at power-on."},
+      {key: "gate", name: "looper_gate", label: "Gate",
+       title: "Playback is heard only while a key or MIDI note is held, and each one restarts the loop (MIDI CC 89; panel: hold both Mode buttons and C#). Off at power-on."},
+    ];
     // Panel ranges as the firmware applies them (decay in the DSP's units).
     const SLIDERS = [
       {key: "mix", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
@@ -450,6 +458,7 @@
     let speedStepsSupported = false;
     let speedModesSupported = false;
     let resonatorModesSupported = false;  // older firmware stops at Ratio (mode 4)
+    let routingSupported = false;
     let pollTimer = null;
     let statusBusy = false;
 
@@ -494,6 +503,16 @@
         ui.mode.appendChild(option);
       });
       ui.mode.addEventListener("change", () => sendMode(side, Number(ui.mode.value)));
+      ui.routingButtons = ROUTING.map((toggle) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = toggle.label;
+        button.title = toggle.title;
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", () => sendRouting(side, toggle, button.getAttribute("aria-pressed") !== "true"));
+        ui.routing.appendChild(button);
+        return button;
+      });
       ui.stepButtons = SPEED_STEPS.map((step, index) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -534,6 +553,15 @@
         await request("set_param", {target: side.name, name: "speed_step", value: index});
       } catch (error) {
         setMessage("Speed not applied: " + error.message, true);
+      }
+    }
+
+    async function sendRouting(side, toggle, on) {
+      if (!transport.connected) return;
+      try {
+        await request("set_param", {target: side.name, name: toggle.name, value: on ? 1 : 0});
+      } catch (error) {
+        setMessage(toggle.label + " not applied: " + error.message, true);
       }
     }
 
@@ -752,6 +780,7 @@
         speedStepsSupported = (hello.capabilities || []).includes("speed_steps");
         speedModesSupported = (hello.capabilities || []).includes("speed_modes");
         resonatorModesSupported = (hello.capabilities || []).includes("resonator_modes");
+        routingSupported = (hello.capabilities || []).includes("looper_routing");
         try {
           await request("loop_status");
         } catch (error) {
@@ -838,7 +867,8 @@
           const side = view[index];
           side.status = {
             audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
-                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7], mode: raw.a[8] || 0},
+                    speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7], mode: raw.a[8] || 0,
+                    post: !!raw.a[9], gate: !!raw.a[10]},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
             mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
           };
@@ -1061,6 +1091,8 @@
           button.setAttribute("aria-pressed", String(index === audio.mode));
         });
         ui.stepButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(index === stepIndex)));
+        ui.routing.hidden = !routingSupported;
+        ui.routingButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(audio[ROUTING[index].key])));
         setValue(ui.level, Math.round(audio.level * 100) + "%", now);
         setValue(ui.direction, audio.reverse ? "Reverse" : "Forward", now);
         setBadge(ui.notesState, notesBadge(notes.state));

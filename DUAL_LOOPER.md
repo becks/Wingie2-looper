@@ -2,7 +2,9 @@
 
 Each mono input feeds an independent looper followed by the original resonator for
 that channel; each side's output (resonator plus dry signal) then goes through a stereo
-pan (see the README; by default left stays hard left and right hard right). The resonator
+pan (see the README; by default left stays hard left and right hard right). A side's looper
+can instead sit after the resonator and pan (CC 88), recording and playing that output
+channel while the resonator keeps sounding the live input at full level. The resonator
 modes, notes, and controls remain unchanged. The looper is an additional processing
 layer, not a new selector mode. It can be controlled over
 TRS MIDI using the configured left and right channels (normally 1 and 2); the Both
@@ -28,7 +30,10 @@ holding F or G for half a second jumps an octave from the current speed instead 
 mode: varispeed (tape: pitch and duration together), pitch (the speed shifts pitch, the
 loop keeps its length) and stretch (the speed changes tempo, the pitch is kept); the LED
 blinks seven times, white, purple or yellow. G# lowers and A#/B♭ raises that side's
-loop level in approximately 6% steps. B toggles reverse playback.
+loop level in approximately 6% steps. B toggles reverse playback. Holding C# for half a
+second toggles gate mode (the press still starts playback; six blinks, red on, white off);
+holding G# for half a second moves the loop before or after the resonator (the level step of
+the press is undone; six blinks, yellow before, purple after). See the README for both.
 
 ### Note loopers
 
@@ -57,6 +62,8 @@ run independently and are not synchronized.
 | 85 | Reverse | 0–63 forward; 64–127 reverse |
 | 86 | Speed step | 0–127 in eight bands of 16: 1/4, 1/2, 2/3, 3/4, 1 (64), 4/3, 3/2, 2 |
 | 87 | Speed mode | 0–42 varispeed; 43–85 pitch (length kept); 86–127 stretch (pitch kept) |
+| 88 | Loop position | 0–63 before the resonator; 64–127 after it |
+| 89 | Gate mode | 0–63 off; 64–127 on (held keys and notes play the loop from its start) |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -95,10 +102,20 @@ loop holds nothing above ~2.4 kHz. During overdub, the live input is mixed at -6
 so new material is heard immediately; it is averaged and written once per low-rate
 buffer position. In playback the loop replaces the live input, unless `looper_live_input`
 (shared, 0/1, configuration page or Loop Monitor; saved, off by default) is on: then the input
-is mixed in at the same -6 dB without being recorded, on both sides.
+is mixed in at the same -6 dB without being recorded, on both sides. After the resonator
+(`looper_post`, per side, 0/1, CC 88 or Loop Monitor; runtime only) the input is that side's
+output channel and always passes at unity, in every state.
 
-Limitations: continuous speed and level (beyond the panel and Loop Monitor steps) and
-cross-feedback still require MIDI (SOS can also be set from the Loop Monitor); there is no MIDI clock
+In gate mode (`looper_gate`, per side, 0/1, CC 89 or Loop Monitor; runtime only) playback is
+multiplied by a gate that opens while panel keys (not in Cave mode), MIDI notes on the side's
+channel (or the Both channel) or the note looper's replay hold it, ramping in ~1 ms. Each new
+key or note asks for a restart: the gate fades to silence (~2 ms), the play position jumps to
+the loop start (the end in reverse) and the grain heads are re-placed. Only playback is gated;
+overdub stays audible. Notes taken by MPE do not gate the loop.
+
+Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
+cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
+over serial with `looper_level`, as the norns script does); there is no MIDI clock
 synchronization, audio persistence, or automatic pitch modulation.
 
 ## Loop Monitor
@@ -108,14 +125,33 @@ loop waveform, position, length, speed, level, direction and SOS, the note loop,
 keys and controls, the looper latch (`latch` 0–2 in `loop_status`: off, on, on and locked), live input during playback (`live` 0/1), and input/output levels (scrolling waveform plus a dot meter, -48 to 0 dB with a 1 s peak dot, red while clipping). Its only controls are each side's Mode select (`set_param` `mode`, 0–18; options above 4 hidden
 without the `resonator_modes` capability in `hello`), Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
-(`set_param` `speed_step`, 0–7), and the Looper latch and Live input in playback checkboxes
+(`set_param` `speed_step`, 0–7), After resonator and Gate toggles (`set_param`
+`looper_post` and `looper_gate`, 0/1; `loop_status` `a[9]` and `a[10]`; hidden without the
+`looper_routing` capability), and the Looper latch and Live input in playback checkboxes
 (shared `looper_latch` and `looper_live_input`), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
 later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`), and the looper
 latch v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`) and live input
 v4.30-duallooper.9 or later (hidden without `live`); the rest works from v4.30-duallooper.5.
 The looper latch itself (boot B+B, the configuration page field) is new in v4.30-duallooper.8,
-live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-duallooper.10.
+live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-duallooper.10,
+the loop position and gate mode in v4.30-duallooper.11.
+
+Two per-side `set_param` names have no Loop Monitor control but are used by the norns
+script (below): `looper_state` (as CC 80: 0 bypass/stop, 1 new recording, 2 playback,
+3 overdub, 4 clear; values outside 0–4 are refused with `invalid_parameter`, so a bad value
+can never clear a loop) and `looper_level` (as CC 82: 0–1, stored in 1/127 steps in the
+same variable the panel's G#/A# level steps use). Both are runtime only, new in
+v4.30-duallooper.11 and advertised as the `looper_state` and `looper_level` capabilities in
+`hello`.
+
+## norns
+
+[`Tools/norns/wingie_monitor`](Tools/norns/wingie_monitor/README.md) is the Loop Monitor on
+norns, over the same serial protocol: both loops on the screen, record / play / overdub /
+stop on K2 and K3 (`looper_state`), speed on E3, and the Loop Monitor controls plus loop
+level (`looper_level`) and line input mono/stereo on a CTRL page. Opening the port from
+norns does not reset the Wingie2, so loops recorded before connecting are kept.
 
 ## CPU headroom
 

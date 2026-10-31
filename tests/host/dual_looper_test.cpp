@@ -206,4 +206,62 @@ int main() {
     w.peaks(out, 4);
     assert(out[0] == 0 && out[1] == 0 && out[2] > 100 && out[3] > 100);
   }
+
+  // After the resonator the input (its output) passes at unity under the loop.
+  {
+    uint8_t data[64];
+    wingie_loop::Loop post;
+    post.attach(data, 64);
+    post.command(1);
+    for (int i = 0; i < 64 * 9; ++i) post.process(0, 1, 1, 1, 0);
+    assert(post.state() == 2);
+    post.setPost(true);
+    assert(std::abs(post.process(.4f, 1, 1, 1, 0) - .4f) < .001f);
+    post.command(3);
+    assert(std::abs(post.process(.4f, 1, 1, 1, 0) - .4f) < .001f);
+  }
+
+  // Gate mode: silent until the gate opens; a trigger restarts from the loop
+  // start after fading out, and releasing the gate fades it out again.
+  {
+    std::vector<uint8_t> buf(400);
+    wingie_loop::Loop g;
+    g.attach(buf.data(), buf.size());
+    g.command(1);
+    for (int i = 0; i < 400 * 9; ++i) g.process(i < 200 * 9 ? 0.5f : -0.5f, 1, 1, 1, 0);
+    assert(g.state() == 2 && g.length() == 400);
+    for (int i = 0; i < 100 * 9; ++i) g.process(0, 1, 1, 1, 0);  // play into the first half
+    g.setGate(true, false);
+    float last = 1;
+    for (int i = 0; i < 400; ++i) last = g.process(0, 1, 1, 1, 0);
+    assert(std::abs(last) < .001f);
+    // Advance into the second (negative) half, then trigger: playback restarts in the first.
+    for (int i = 0; i < 150 * 9; ++i) g.process(0, 1, 1, 1, 0);
+    assert(g.position() > 200);
+    g.setGate(true, true);
+    g.retrigger();
+    for (int i = 0; i < 20 * 9; ++i) last = g.process(0, 1, 1, 1, 0);
+    assert(g.position() < 40 && last > .4f);
+    // Retriggering while open fades out first, with no jump larger than the fade allows.
+    for (int i = 0; i < 250 * 9; ++i) g.process(0, 1, 1, 1, 0);
+    assert(g.position() > 250);
+    g.retrigger();
+    float previous = g.process(0, 1, 1, 1, 0), biggest = 0;
+    for (int i = 0; i < 400; ++i) {
+      float x = g.process(0, 1, 1, 1, 0);
+      biggest = std::max(biggest, std::abs(x - previous));
+      previous = x;
+    }
+    assert(biggest < .05f && g.position() < 60 && previous > .4f);
+    g.setGate(true, false);
+    for (int i = 0; i < 400; ++i) last = g.process(0, 1, 1, 1, 0);
+    assert(std::abs(last) < .001f);
+    // Overdub ignores the gate; leaving gate mode makes playback audible again.
+    g.command(3);
+    for (int i = 0; i < 400; ++i) last = g.process(0, 1, 1, 0, 0);
+    g.command(2);
+    g.setGate(false, false);
+    for (int i = 0; i < 400; ++i) last = g.process(0, 1, 1, 1, 0);
+    assert(g.state() == 2);
+  }
 }

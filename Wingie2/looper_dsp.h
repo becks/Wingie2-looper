@@ -28,6 +28,11 @@ class LooperDSP : public decorator_dsp {
   std::atomic<int> speedMode_[2] {{0}, {0}};
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   std::atomic<bool> liveInput_ {false};
+  // Loop after the resonator (records and plays its output) and gate mode, per side.
+  std::atomic<bool> post_[2] {{false}, {false}}, gateMode_[2] {{false}, {false}};
+  // Gate sources holding it open (wingie_loop::GateSource bits) and a pending restart, per side.
+  std::atomic<uint8_t> gateSources_[2] {{0}, {0}};
+  std::atomic<bool> retrigger_[2] {{false}, {false}};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -119,6 +124,8 @@ public:
     out.reverse = reverse_[ch].load();
     out.retention = retention_[ch].load();
     out.speedMode = speedMode_[ch].load();
+    out.post = post_[ch].load();
+    out.gate = gateMode_[ch].load();
   }
   void peaks(int ch, uint8_t* out, size_t buckets) const {
     if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
@@ -141,6 +148,18 @@ public:
   }
   // Both sides: keep the live input audible (-6 dB) while a loop plays.
   void setLiveInput(bool on) { liveInput_.store(on); }
+  void setPost(int ch, bool on) { if (ch >= 0 && ch < 2) post_[ch].store(on); }
+  void setGateMode(int ch, bool on) { if (ch >= 0 && ch < 2) gateMode_[ch].store(on); }
+  // A gate source opens (and restarts the loop) or releases the side's gate.
+  void gateNote(int ch, uint8_t source, bool on) {
+    if (ch < 0 || ch > 1) return;
+    if (on) {
+      gateSources_[ch].fetch_or(source);
+      retrigger_[ch].store(true);
+    } else {
+      gateSources_[ch].fetch_and((uint8_t)~source);
+    }
+  }
   bool takeFilled(int ch) { return ch >= 0 && ch < 2 && filled_[ch].exchange(false); }
   bool takeWrapped(int ch) { return ch >= 0 && ch < 2 && wrapped_[ch].exchange(false); }
   void control(int ch, int cc, int value) {
@@ -157,6 +176,8 @@ public:
       case 86: setSpeed(ch, wingie_loop::kSpeedSteps[wingie_loop::speedStepFromCC(value)]); break;
       case 84: cross_[ch].store(0.25f * value/127.0f); break;
       case 85: reverse_[ch].store(value >= 64); break;
+      case 88: post_[ch].store(value >= 64); break;
+      case 89: gateMode_[ch].store(value >= 64); break;
     }
   }
   // Fills out[] with average/peak cycles per block (total, looper only) and the
@@ -201,9 +222,23 @@ public:
     meter_.addBlock(signals, count);
   }
 private:
+  void processLoop(int ch, const float* input, float* output, int n, const float* speed,
+                   const float* level, const float* retention, const float* cross,
+                   const bool* reverse, const int* mode, bool captureFeedback) {
+    // Pitch mode keeps the play position at 1x and shifts the grains; stretch
+    // moves it at the speed while the grains keep the recorded pitch.
+    float tempo, pitch;
+    wingie_loop::speedModeRates(mode[ch], speed[ch], tempo, pitch);
+    float step = tempo / wingie_loop::Loop::rateDivision();
+    const float* feedback = captureFeedback ? feedback_[1-ch] : nullptr;
+    if (reverse[ch])
+      loop_[ch].processReverse(input, output, n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
+    else
+      loop_[ch].process(input, output, n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
+  }
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
     float speed[2], level[2], retention[2], cross[2];
-    bool reverse[2];
+    bool reverse[2], post[2];
     int mode[2];
     const bool liveInput = liveInput_.load();
     for (int ch=0; ch<2; ++ch) {
@@ -215,6 +250,10 @@ private:
       level[ch]=level_[ch].load();
       retention[ch]=retention_[ch].load(); cross[ch]=cross_[ch].load();
       loop_[ch].setLiveInput(liveInput);
+      post[ch] = post_[ch].load();
+      loop_[ch].setPost(post[ch]);
+      loop_[ch].setGate(gateMode_[ch].load(), gateSources_[ch].load() != 0);
+      if (retrigger_[ch].exchange(false)) loop_[ch].retrigger();
     }
     bool active[2] = {loop_[0].active(), loop_[1].active()};
     if (!active[0] && !active[1]) {
@@ -226,29 +265,29 @@ private:
     for (int offset=0; offset<count; offset+=64) {
       int n=std::min(64, count-offset);
       FAUSTFLOAT storage[2][64];
-      FAUSTFLOAT *in[2]={active[0] ? storage[0] : inputs[0]+offset,
-                        active[1] ? storage[1] : inputs[1]+offset};
+      // A loop before the resonator feeds it through storage; one after it
+      // reads the output channel (after pan) and writes it back in place.
+      bool pre[2] = {active[0] && !post[0], active[1] && !post[1]};
+      FAUSTFLOAT *in[2]={pre[0] ? storage[0] : inputs[0]+offset,
+                        pre[1] ? storage[1] : inputs[1]+offset};
       FAUSTFLOAT *out[2]={outputs[0]+offset,outputs[1]+offset};
 #if LOOPER_PROFILE
       uint32_t loopStart = xthal_get_ccount();
 #endif
-      for (int ch=0; ch<2; ++ch) {
-        if (!active[ch]) continue;
-        // Pitch mode keeps the play position at 1x and shifts the grains; stretch
-        // moves it at the speed while the grains keep the recorded pitch.
-        float tempo, pitch;
-        wingie_loop::speedModeRates(mode[ch], speed[ch], tempo, pitch);
-        float step = tempo / wingie_loop::Loop::rateDivision();
-        const float* feedback = captureFeedback ? feedback_[1-ch] : nullptr;
-        if (reverse[ch])
-          loop_[ch].processReverse(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
-        else
-          loop_[ch].process(inputs[ch]+offset, in[ch], n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
-      }
+      for (int ch=0; ch<2; ++ch)
+        if (pre[ch]) processLoop(ch, inputs[ch]+offset, in[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback);
 #if LOOPER_PROFILE
       profBlockLoop_ += xthal_get_ccount() - loopStart;
 #endif
       fDSP->compute(n,in,out);
+#if LOOPER_PROFILE
+      loopStart = xthal_get_ccount();
+#endif
+      for (int ch=0; ch<2; ++ch)
+        if (active[ch] && post[ch]) processLoop(ch, out[ch], out[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback);
+#if LOOPER_PROFILE
+      profBlockLoop_ += xthal_get_ccount() - loopStart;
+#endif
       if (captureFeedback) {
         for (int i=0; i<n; ++i) for (int ch=0; ch<2; ++ch)
           feedback_[ch][i]=wingie_loop::Loop::limit(out[ch][i]);
