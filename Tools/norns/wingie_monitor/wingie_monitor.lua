@@ -28,7 +28,8 @@ local SPEED_STEPS = {1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2}
 local SPEED_LABELS = {"1/4", "1/2", "2/3", "3/4", "1", "4/3", "3/2", "2"}
 local SPEED_MODES = {"vari", "pitch", "strch"}
 local SIDE_NAMES = {"left", "right"}
-local PAGES = {"LOOP", "CTRL", "NOTES", "PANEL", "METERS", "SYS"}
+-- One LOOP page per loop (A, then B): its keys and encoders act on that loop.
+local PAGES = {"LOOP A", "LOOP B", "CTRL", "NOTES", "PANEL", "METERS", "SYS"}
 local KEY_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 local BLACK = {[1] = true, [3] = true, [6] = true, [8] = true, [10] = true}
 local NOTES_BADGES = {[0] = "--", "REC", "PLAY", "STOP"}
@@ -48,6 +49,7 @@ local connected = false
 local opened_at = 0
 local firmware = ""
 local has_state = false   -- firmware accepts set_param looper_state
+local has_window = false  -- firmware has the playback window (looper_start/end)
 
 -- device model
 local status = nil
@@ -140,8 +142,11 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state = false
-      for _, c in ipairs(r.capabilities or {}) do if c == "looper_state" then has_state = true end end
+      has_state, has_window = false, false
+      for _, c in ipairs(r.capabilities or {}) do
+        if c == "looper_state" then has_state = true end
+        if c == "looper_window" then has_window = true end
+      end
       message = ""
       for _, s in ipairs(sides) do s.wave_length = -1 end
     elseif util.time() - opened_at < HELLO_DEADLINE then
@@ -387,12 +392,30 @@ local function speed_label(speed)
   return string.format("%.2f", speed)
 end
 
+-- Playback window frames as the firmware computes them (at least WINDOW_MIN frames).
+local WINDOW_MIN = 64
+local function window_frames(length, start, finish)
+  local b = math.min(length, math.floor(start * length))
+  local e = math.min(length, math.floor(finish * length + 0.5))
+  local min = math.min(length, WINDOW_MIN)
+  if e < b + min then
+    e = b + min
+    if e > length then e, b = length, length - min end
+  end
+  return b, e - b
+end
+
+-- Playback wraps inside the window; a position outside it (the window just moved)
+-- stays as polled until the Wingie2 has jumped.
 local function audio_position(a, elapsed)
   local state, length, position, speed, reverse = a[1], a[2], a[3], a[5], a[7] == 1
   if (state ~= 2 and state ~= 3) or length == 0 then return position end
+  local begin, span = window_frames(length, a[12] or 0, a[13] or 1)
+  local relative = position - begin
+  if span == 0 or relative < 0 or relative >= span then return position end
   local fps = (status and status.fps) or 4900
-  local p = position + elapsed * fps * speed * (reverse and -1 or 1)
-  return p % length
+  local p = relative + elapsed * fps * speed * (reverse and -1 or 1)
+  return begin + p % span
 end
 
 local function audio_badge(state, length)
@@ -418,6 +441,28 @@ end
 
 local function onoff(v) return v == 1 and "on" or "off" end
 local function pct(v) return tostring(math.floor(v * 100 + 0.5)) end
+
+local current_window  -- defined after ROWS
+
+-- Window edge as seconds into the recording ("-" without a recording).
+local function window_label(v, side)
+  local s = side_status(side)
+  if not s or s.a[2] == 0 then return "-" end
+  local fps = (status and status.fps) or 4900
+  return string.format("%.2fs", v * s.a[2] / fps)
+end
+
+-- One encoder step of a window edge: 1/1000 of the recording, more when turned
+-- fast; the edges keep the firmware's minimum length between them.
+local function window_step(v, d, side, edge)
+  local s = side_status(side)
+  if not s or s.a[2] == 0 or s.a[1] == 1 then return v end
+  local min = math.min(1, WINDOW_MIN / s.a[2])
+  local nv = v + d * math.abs(d) * 0.001
+  local start, finish = current_window(side)
+  if edge == "start" then return util.clamp(nv, 0, math.max(0, finish - min)) end
+  return util.clamp(nv, math.min(1, start + min), 1)
+end
 
 -- Rows of the CTRL page. get(s) reads the side's loop_status entry (or the shared
 -- frame), set(v, d) turns the current value one encoder step.
@@ -447,6 +492,15 @@ local ROWS = {
   {label = "gate", name = "looper_gate",
    get = function(s) return s.a[11] or 0 end, show = onoff,
    step = function(v, d) return d > 0 and 1 or 0 end},
+  -- playback window edges, shares of the recording; fast turns move further
+  {label = "start", name = "looper_start", window = true,
+   get = function(s) return s.a[12] or 0 end,
+   show = function(v, side) return window_label(v, side) end,
+   step = function(v, d, side) return window_step(v, d, side, "start") end},
+  {label = "end", name = "looper_end", window = true,
+   get = function(s) return s.a[13] or 1 end,
+   show = function(v, side) return window_label(v, side) end,
+   step = function(v, d, side) return window_step(v, d, side, "end") end},
   {label = "position", name = "looper_post",
    get = function(s) return s.a[10] or 0 end,
    show = function(v) return v == 1 and "post" or "pre" end,
@@ -467,10 +521,22 @@ local ROWS = {
    step = function(v, d) return d > 0 and 1 or 0 end},
 }
 local row_sel = 1
-local loop_sel = 1   -- LOOP page: 1 A, 2 B
+-- The loop a LOOP page acts on (1 A, 2 B), nil on the other pages.
+local function loop_page()
+  if PAGES[page] == "LOOP A" then return 1 end
+  if PAGES[page] == "LOOP B" then return 2 end
+end
 
 local function row_named(name)
   for _, row in ipairs(ROWS) do if row.name == name then return row end end
+end
+
+-- The window as shown: a value just sent, else the polled one.
+current_window = function(side)
+  local s = side_status(side)
+  if not s then return 0, 1 end
+  return current(row_named("looper_start"), side, s.a[12] or 0),
+         current(row_named("looper_end"), side, s.a[13] or 1)
 end
 
 -- Looper state as on the Wingie2 (MIDI CC 80): 0 stop/bypass, 1 recording,
@@ -514,7 +580,12 @@ local function row_value(row, side)
 end
 
 local function change_row(row, side, d)
-  local v = row.step(row_value(row, side), d)
+  if row.window and not has_window then
+    message = "flash firmware with the loop window"
+    clock.run(function() clock.sleep(2); message = "" end)
+    return
+  end
+  local v = row.step(row_value(row, side), d, side)
   if row.name == "looper_latch" and v == 1 and row_value(row, side) == 2 then return end
   if v == row_value(row, side) then return end
   local key_side = row.shared and 0 or side
@@ -528,26 +599,27 @@ function enc(n, d)
     return
   end
   if not status then return end
-  if page == 1 then
-    -- E2 moves the selection as on screen: clockwise down to A, back up to B.
-    if n == 2 then loop_sel = d > 0 and 1 or 2
-    else change_row(row_named("speed_step"), loop_sel, d) end
+  local side = loop_page()
+  if side then
+    -- E2 the start of the playback window, E3 its end.
+    change_row(row_named(n == 2 and "looper_start" or "looper_end"), side, d)
     return
   end
-  if page ~= 2 then return end
+  if PAGES[page] ~= "CTRL" then return end
   -- E2 the A (left) column, E3 the B (right) one; shared rows take either.
   change_row(ROWS[row_sel], n == 2 and 1 or 2, d)
 end
 
 function key(n, z)
   if z == 0 then return end
-  if page == 1 then
+  local side = loop_page()
+  if side then
     if not status then return end
-    if n == 2 then record_or_overdub(loop_sel)
-    elseif n == 3 then stop_or_play(loop_sel) end
-  elseif page == 2 and n > 1 then
+    if n == 2 then record_or_overdub(side)
+    elseif n == 3 then stop_or_play(side) end
+  elseif PAGES[page] == "CTRL" and n > 1 then
     row_sel = util.clamp(row_sel + (n == 2 and -1 or 1), 1, #ROWS)
-  elseif n == 3 and page == #PAGES then
+  elseif n == 3 and PAGES[page] == "SYS" then
     for _, w in ipairs(sides) do w.wave_length = -1; w.notes_revision = -1 end
     stats.rtt_max = 0
   end
@@ -570,11 +642,21 @@ local function draw_wave(i, top, height, elapsed)
   if capacity == 0 then return end
   local span = state == 1 and capacity or math.max(length, 1)
   local drawn = 128 * math.min(1, w.wave_length > 0 and w.wave_length / span or 0)
+  -- the playback window, in screen columns (whole loop while recording)
+  local wl, wr = 0, 128
+  local windowed = has_window and state ~= 1 and length > 0
+  if windowed then
+    local start, finish = current_window(i)
+    local begin, wspan = window_frames(length, start, finish)
+    wl, wr = math.floor(begin / length * 128), math.floor((begin + wspan) / length * 128)
+    windowed = begin > 0 or begin + wspan < length
+  end
   if w.peaks and #w.peaks > 0 and w.wave_length > 0 then
     local count = #w.peaks
     local half = height / 2 - 1
-    screen.level(state == 0 and 5 or 10)
     for x = 0, math.floor(drawn) - 1 do
+      local inside = x >= wl and x < wr
+      screen.level(inside and (state == 0 and 5 or 10) or 2)
       local lo = math.floor(x * count / drawn) + 1
       local hi = math.max(lo, math.floor((x + 1) * count / drawn))
       local peak = 0
@@ -584,6 +666,16 @@ local function draw_wave(i, top, height, elapsed)
       screen.line(x + 0.5, middle + h + 1)
       screen.stroke()
     end
+  end
+  if windowed then
+    -- edge marks: brackets at the top and bottom of the wave
+    screen.level(12)
+    screen.rect(wl, top, 1, height); screen.fill()
+    screen.rect(math.max(0, wr - 1), top, 1, height); screen.fill()
+    screen.rect(wl, top, 3, 1); screen.fill()
+    screen.rect(wl, top + height - 1, 3, 1); screen.fill()
+    screen.rect(math.max(0, wr - 3), top, 3, 1); screen.fill()
+    screen.rect(math.max(0, wr - 3), top + height - 1, 3, 1); screen.fill()
   end
   if state == 1 then
     screen.level(3)
@@ -600,9 +692,10 @@ end
 
 local function draw_side_header(i, y)
   local s = side_status(i)
-  -- on the LOOP page the selected loop is bright, the other dim
-  local active = page ~= 1 or i == loop_sel
-  if page == 1 and active then
+  -- on a LOOP page its loop is bright, the other dim
+  local selected = loop_page()
+  local active = not selected or i == selected
+  if selected and active then
     screen.level(4)
     screen.rect(0, y - 6, 6, 7)
     screen.fill()
@@ -624,7 +717,15 @@ local function draw_side_header(i, y)
   local speed = (p and util.time() - p.at < PENDING_HOLD) and SPEED_STEPS[p.value + 1] or a[5]
   screen.text("x" .. speed_label(speed) .. (a[7] == 1 and "<" or ""))
   screen.move(128, y)
-  if page == 1 then
+  local ps, pe = pending["looper_start" .. i], pending["looper_end" .. i]
+  local now = util.time()
+  if selected == i and a[2] > 0 and ((ps and now - ps.at < 1.5) or (pe and now - pe.at < 1.5)) then
+    -- the window edges in seconds while they are being moved
+    local start, finish = current_window(i)
+    local begin, span = window_frames(a[2], start, finish)
+    screen.text_right(string.format("%.2f-%.2f", begin / fps, (begin + span) / fps))
+  elseif selected then
+    -- both loops show their level on the LOOP pages
     screen.text_right("vol " .. pct(current(row_named("looper_level"), i, a[6])))
   else
     screen.text_right(MODES[s.m + 1] or "?")
@@ -657,12 +758,12 @@ local function draw_ctrl()
     screen.text(row.label)
     if row.shared then
       screen.move(126, y)
-      screen.text_right(row.show(row_value(row, 0)))
+      screen.text_right(row.show(row_value(row, 0), 0))
     else
       for side = 1, 2 do
         screen.level(selected and 15 or 6)
         screen.move(side == 1 and 88 or 126, y)
-        screen.text_right(row.show(row_value(row, side)))
+        screen.text_right(row.show(row_value(row, side), side))
       end
     end
   end
@@ -847,15 +948,16 @@ function redraw()
   end
   local elapsed = util.time() - status_at
   advance_levels(util.time())
-  if page == 2 then
+  local name = PAGES[page]
+  if name == "CTRL" then
     draw_ctrl()
-  elseif page == 3 then
+  elseif name == "NOTES" then
     draw_notes(elapsed)
-  elseif page == 4 then
+  elseif name == "PANEL" then
     draw_panel()
-  elseif page == 5 then
+  elseif name == "METERS" then
     draw_meters(util.time())
-  elseif page == 6 then
+  elseif name == "SYS" then
     draw_sys()
   else
     -- B on top, A below: as the Wingie2 panel.

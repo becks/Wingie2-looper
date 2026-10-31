@@ -12,7 +12,8 @@ is needed.
   the maiden REPL: it should print `table: 0x…`, not `nil`.
 - **Wingie2 firmware v4.30-duallooper.11 or later** (the release with `looper_state` and
   `looper_level`). Older firmware still shows everything, but K2/K3 on the LOOP page and the
-  `level` row answer "flash firmware with looper_state".
+  `level` row answer "flash firmware with looper_state". The `start` and `end` rows need
+  v4.30-duallooper.12 or later.
 - A **USB data cable** from the Wingie2 to a norns USB port. A charge-only cable powers the
   Wingie2 but norns never sees it (the screen stays on "waiting for Wingie2…").
 - A **norns power supply that holds 5.1 V at 3 A** (the official Raspberry Pi 4 supply or
@@ -51,8 +52,8 @@ E1 changes page.
 
 | Page | Shows | Controls |
 |---|---|---|
-| LOOP | both loops (B on top, A below, as on the panel): state, length, speed, waveform and play head, loop level | E2 selects the loop (clockwise A, below; back B, on top); E3 speed of the selected loop; K2 record → (again) play → overdub ↔ play; K3 stop ↔ play (a recording closes and plays) |
-| CTRL | the Loop Monitor controls in two columns, A and B | K2/K3 row up/down, E2 value A (left), E3 value B (right); shared rows take either |
+| LOOP A, LOOP B | both loops (B on top, A below, as on the panel), the page's loop highlighted: state, length, speed, waveform and play head, playback window (brackets; outside it dim), loop level | for the page's loop: K2 record → (again) play → overdub ↔ play; K3 stop ↔ play (a recording closes and plays); E2 start and E3 end of the playback window (seconds shown top right while moving; 1/1000 of the recording per step, more when turned fast) |
+| CTRL | the Loop Monitor controls in two columns, A and B, speed included | K2/K3 row up/down, E2 value A (left), E3 value B (right); shared rows take either |
 | NOTES | the note loops: state, events, length, events on 12 rows, cursor | |
 | PANEL | mode, octave, last note and held keys per side; mix, volume, decay; thresholds and clip gains with their keys; line/mic and mono | |
 | METERS | input and output levels, scrolling (about 1 s), dB and clip | |
@@ -60,8 +61,10 @@ E1 changes page.
 
 K2 on a stopped loop starts a **new** recording (the old loop is replaced), as MIDI CC 80 = 1.
 
-CTRL rows: speed (step), speed mode, SOS, loop level, mode, pan, gate, position (pre/post the
-resonator), and the shared live input, looper latch and line input mono/stereo. Line input
+CTRL rows: speed (step), speed mode, SOS, loop level, mode, pan, gate, start and end of the
+playback window (in seconds into the recording; 1/1000 of it per step, more when turned fast;
+the edges never cross), position (pre/post the resonator), and the shared live input, looper
+latch and line input mono/stereo. Line input
 mono/stereo is applied at once but kept over power-off only after a Save (configuration page,
 or both Mode buttons held for 3 s); the other rows behave like their MIDI CCs (runtime only,
 except the latch and live input, saved like the other settings). A value just sent is shown

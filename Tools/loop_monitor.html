@@ -149,6 +149,7 @@
       border-radius: 6px;
     }
     canvas.wave { height: 110px; }
+    canvas.wave.window { cursor: ew-resize; touch-action: none; }
     canvas.roll { height: 150px; }
 
     .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); }
@@ -291,7 +292,8 @@
       both Mode buttons for 3 s); SOS, speed and the toggles are not saved (SOS returns to 80%, speed to 1×,
       the loop to before the resonator with the gate off at power-on). Close the page before using the Arduino serial monitor or the web flasher. Requires
       firmware v4.30-duallooper.5 or later; Pan and SOS need v4.30-duallooper.6 or later, the speed
-      steps v4.30-duallooper.7 or later, the toggles v4.30-duallooper.11 or later.
+      steps v4.30-duallooper.7 or later, the toggles v4.30-duallooper.11 or later, the playback window (drag its edges on the waveform,
+      double-click for the whole loop) v4.30-duallooper.12 or later.
     </footer>
   </main>
 
@@ -313,6 +315,7 @@
           <span>Speed <b data-speed>–</b></span>
           <span>Level <b data-level>–</b></span>
           <span>Direction <b data-direction>–</b></span>
+          <span data-window-wrap hidden title="Playback window: drag its edges on the waveform (MIDI CC 90/91). A new recording or clear plays the whole loop again; runtime only.">Window <b data-window>–</b> <button type="button" data-window-reset>Whole loop</button></span>
           <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
         <div class="speed-steps" data-speed-steps hidden role="group" aria-label="Speed steps" title="Speed in pure-ratio steps (MIDI CC 86). Speed also changes pitch and loop duration."></div>
@@ -380,7 +383,12 @@
     const CONTROLS = {
       pan: {toDevice: (v) => v, fromDevice: (v) => v, label: panLabel},
       sos: {toDevice: (v) => v / 100, fromDevice: (v) => Math.round(v * 100), label: (v) => v + "%"},
+      // Playback window edges (shares of the recording), dragged on the waveform.
+      looper_start: {toDevice: (v) => v},
+      looper_end: {toDevice: (v) => v},
     };
+    // The firmware keeps the window at least this many frames long (~13 ms).
+    const WINDOW_MIN_FRAMES = 64;
     // Interval steps (set_param speed_step, MIDI CC 86): the firmware's pure ratios.
     const SPEED_STEPS = [
       {ratio: 1 / 4, label: "−2 oct"}, {ratio: 1 / 2, label: "−oct"}, {ratio: 2 / 3, label: "−5th"},
@@ -440,7 +448,10 @@
       notesBusy: false,
       lastNotesMs: null,
       playedUntil: new Array(12).fill(0),
-      controls: {pan: {holdUntil: 0, wanted: null, busy: false}, sos: {holdUntil: 0, wanted: null, busy: false}},
+      controls: {pan: {holdUntil: 0, wanted: null, busy: false}, sos: {holdUntil: 0, wanted: null, busy: false},
+                 looper_start: {holdUntil: 0, wanted: null, busy: false}, looper_end: {holdUntil: 0, wanted: null, busy: false}},
+      // Window as last set from this page, shown while the device catches up.
+      window: {start: 0, end: 1, holdUntil: 0, drag: null},
       modeHoldUntil: 0,
       modeBusy: false,
       ui: null,
@@ -459,6 +470,7 @@
     let speedModesSupported = false;
     let resonatorModesSupported = false;  // older firmware stops at Ratio (mode 4)
     let routingSupported = false;
+    let windowSupported = false;
     let pollTimer = null;
     let statusBusy = false;
 
@@ -523,6 +535,7 @@
         return button;
       });
       for (const name of Object.keys(CONTROLS)) {
+        if (!ui[name]) continue;  // the window edges are dragged on the waveform, no slider
         ui[name].addEventListener("input", () => {
           const control = side.controls[name];
           control.holdUntil = performance.now() + CONTROL_HOLD_MS;
@@ -531,8 +544,89 @@
           sendControl(side, name);
         });
       }
+      ui.wave.addEventListener("pointerdown", (event) => windowPointer(side, event, "down"));
+      ui.wave.addEventListener("pointermove", (event) => windowPointer(side, event, "move"));
+      ui.wave.addEventListener("pointerup", (event) => windowPointer(side, event, "up"));
+      ui.wave.addEventListener("pointercancel", (event) => windowPointer(side, event, "up"));
+      ui.wave.addEventListener("dblclick", () => setWindow(side, 0, 1));
+      ui.windowReset.addEventListener("click", () => setWindow(side, 0, 1));
       elements.sides.appendChild(node);
       side.ui = ui;
+    }
+
+    // ---------- Playback window ----------
+
+    function windowEditable(side) {
+      const audio = side.status && side.status.audio;
+      return windowSupported && transport.connected && !!audio && audio.length > 0 && audio.state !== 1;
+    }
+
+    // The window shown: the one being set here, else the device's.
+    function shownWindow(side, now) {
+      const audio = side.status && side.status.audio;
+      if (side.window.drag || now <= side.window.holdUntil || !audio) return side.window;
+      return {start: audio.start, end: audio.end};
+    }
+
+    // Window frames as the firmware computes them (at least WINDOW_MIN_FRAMES).
+    function windowFrames(audio, win) {
+      const length = audio.length;
+      let begin = Math.min(length, Math.floor(win.start * length));
+      let end = Math.min(length, Math.floor(win.end * length + 0.5));
+      const min = Math.min(length, WINDOW_MIN_FRAMES);
+      if (end < begin + min) {
+        end = begin + min;
+        if (end > length) { end = length; begin = length - min; }
+      }
+      return {begin, span: end - begin};
+    }
+
+    function setWindow(side, start, end) {
+      if (!windowEditable(side)) return;
+      start = Math.min(Math.max(0, start), 1);
+      end = Math.min(Math.max(0, end), 1);
+      const win = side.window;
+      const current = shownWindow(side, performance.now());
+      if (current.start !== start) {
+        side.controls.looper_start.wanted = start;
+        sendControl(side, "looper_start");
+      }
+      if (current.end !== end) {
+        side.controls.looper_end.wanted = end;
+        sendControl(side, "looper_end");
+      }
+      win.start = start;
+      win.end = end;
+      win.holdUntil = performance.now() + CONTROL_HOLD_MS;
+    }
+
+    function windowPointer(side, event, phase) {
+      const win = side.window;
+      if (phase === "up") {
+        if (win.drag) {
+          win.drag = null;
+          win.holdUntil = performance.now() + CONTROL_HOLD_MS;
+        }
+        return;
+      }
+      if (!windowEditable(side)) return;
+      const rect = side.ui.wave.getBoundingClientRect();
+      const share = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+      const minShare = Math.min(1, WINDOW_MIN_FRAMES / side.status.audio.length);
+      if (phase === "down") {
+        const current = shownWindow(side, performance.now());
+        win.start = current.start;
+        win.end = current.end;
+        // The nearer edge follows the pointer; with both at one spot, the side it is on.
+        const toStart = Math.abs(share - current.start), toEnd = Math.abs(share - current.end);
+        win.drag = toStart < toEnd || (toStart === toEnd && share < current.start) ? "start" : "end";
+        side.ui.wave.setPointerCapture(event.pointerId);
+      } else if (!win.drag) {
+        return;
+      }
+      event.preventDefault();
+      if (win.drag === "start") setWindow(side, Math.min(share, win.end - minShare), win.end);
+      else setWindow(side, win.start, Math.max(share, win.start + minShare));
     }
 
     // 0 hard left, 0.5 center, 1 hard right.
@@ -615,7 +709,7 @@
       try {
         await request("set_param", {target: side.name, name, value});
       } catch (error) {
-        setMessage(name.toUpperCase() + " not applied: " + error.message, true);
+        setMessage((name.startsWith("looper_") ? "Window" : name.toUpperCase()) + " not applied: " + error.message, true);
       } finally {
         control.busy = false;
         control.holdUntil = performance.now() + CONTROL_HOLD_MS;
@@ -781,6 +875,7 @@
         speedModesSupported = (hello.capabilities || []).includes("speed_modes");
         resonatorModesSupported = (hello.capabilities || []).includes("resonator_modes");
         routingSupported = (hello.capabilities || []).includes("looper_routing");
+        windowSupported = (hello.capabilities || []).includes("looper_window");
         try {
           await request("loop_status");
         } catch (error) {
@@ -868,7 +963,8 @@
           side.status = {
             audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
                     speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7], mode: raw.a[8] || 0,
-                    post: !!raw.a[9], gate: !!raw.a[10]},
+                    post: !!raw.a[9], gate: !!raw.a[10],
+                    start: raw.a.length > 12 ? raw.a[11] : 0, end: raw.a.length > 12 ? raw.a[12] : 1},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
             mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
           };
@@ -951,11 +1047,16 @@
     }
 
     // Extrapolated play position between polls, in frames.
+    // Playback wraps inside the window; a position outside it (the window just
+    // moved) is shown as polled until the device has jumped.
     function audioPosition(audio, elapsedMs) {
       if (audio.state !== 2 && audio.state !== 3) return audio.position;
       if (!audio.length) return 0;
+      const {begin, span} = windowFrames(audio, audio);
+      const relative = audio.position - begin;
+      if (relative < 0 || relative >= span || !span) return audio.position;
       const delta = (elapsedMs / 1000) * fps * audio.speed * (audio.reverse ? -1 : 1);
-      return (((audio.position + delta) % audio.length) + audio.length) % audio.length;
+      return begin + (((relative + delta) % span) + span) % span;
     }
 
     function notesPosition(notes, elapsedMs) {
@@ -987,6 +1088,23 @@
       if (audio.state === 1) {
         context.fillStyle = "rgba(255,77,77,0.12)";
         context.fillRect(0, 0, width * Math.min(1, audio.length / audio.capacity), height);
+      }
+      side.ui.wave.classList.toggle("window", windowEditable(side));
+      if (windowSupported && audio.length && audio.state !== 1) {
+        // Outside the window dimmed, its edges as handles.
+        const win = shownWindow(side, performance.now());
+        const {begin, span} = windowFrames(audio, win);
+        const left = (begin / audio.length) * width, right = ((begin + span) / audio.length) * width;
+        context.fillStyle = "rgba(12,13,16,0.72)";
+        context.fillRect(0, 0, left, height);
+        context.fillRect(right, 0, width - right, height);
+        if (begin > 0 || begin + span < audio.length) {
+          context.fillStyle = colorFor(2);
+          context.fillRect(left, 0, 2 * ratio, height);
+          context.fillRect(right - 2 * ratio, 0, 2 * ratio, height);
+          context.fillRect(left, 0, 8 * ratio, 2 * ratio);
+          context.fillRect(right - 8 * ratio, height - 2 * ratio, 8 * ratio, 2 * ratio);
+        }
       }
       if ((audio.state === 2 || audio.state === 3) && audio.length) {
         const x = (audioPosition(audio, elapsed) / audio.length) * width;
@@ -1103,6 +1221,15 @@
         trackPlayed(side, elapsed, now);
         renderControl(side, "pan", status.sliders[3], now);
         renderControl(side, "sos", audio.sos, now);
+        ui.windowWrap.hidden = !windowSupported;
+        if (windowSupported) {
+          const win = shownWindow(side, now);
+          const {begin, span} = windowFrames(audio, win);
+          const whole = !audio.length || (begin === 0 && span === audio.length);
+          ui.window.textContent = !audio.length || audio.state === 1 ? "–"
+            : whole ? "whole loop" : seconds(begin) + " – " + seconds(begin + span) + " (" + seconds(span) + ")";
+          ui.windowReset.disabled = whole || !windowEditable(side);
+        }
       }
       ui.keyCells.forEach((cell, key) => {
         const held = status && (status.keys >> key) & 1;

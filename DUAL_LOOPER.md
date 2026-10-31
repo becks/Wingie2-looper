@@ -64,6 +64,8 @@ run independently and are not synchronized.
 | 87 | Speed mode | 0–42 varispeed; 43–85 pitch (length kept); 86–127 stretch (pitch kept) |
 | 88 | Loop position | 0–63 before the resonator; 64–127 after it |
 | 89 | Gate mode | 0–63 off; 64–127 on (held keys and notes play the loop from its start) |
+| 90 | Playback window start | 0–127 = 0–100% of the recording |
+| 91 | Playback window end | 0–127 = 0–100% of the recording |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -113,6 +115,18 @@ key or note asks for a restart: the gate fades to silence (~2 ms), the play posi
 the loop start (the end in reverse) and the grain heads are re-placed. Only playback is gated;
 overdub stays audible. Notes taken by MPE do not gate the loop.
 
+The playback window (`looper_start` and `looper_end`, per side, 0–1 of the recording in
+1/10000 steps, CC 90 and 91 in 1/127 steps, Loop Monitor or norns; runtime only) chooses the
+part of the recording that plays. It is not destructive: the whole recording stays in memory
+and widening the window brings it back. Playback, reverse, the pitch and stretch grains, the
+edge fades and the gate restart all run inside the window, and overdub writes only inside it.
+The firmware keeps it at least 64 frames (~13 ms) long, moving the end (or the start, at the
+end of the recording) when the edges are closer or crossed. Moving an edge while the play
+position stays inside the window does not disturb it; when the position falls outside, the
+loop fades out (~2 ms, as a gate restart) and starts again from the window start (the end in
+reverse). A new recording or clear resets the window to the whole loop. `loop_status` reports
+it as `a[11]` and `a[12]` (shares of the length).
+
 Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
 over serial with `looper_level`, as the norns script does); there is no MIDI clock
@@ -135,7 +149,9 @@ latch v4.30-duallooper.8 or later (hidden when `loop_status` has no `latch`) and
 v4.30-duallooper.9 or later (hidden without `live`); the rest works from v4.30-duallooper.5.
 The looper latch itself (boot B+B, the configuration page field) is new in v4.30-duallooper.8,
 live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-duallooper.10,
-the loop position and gate mode in v4.30-duallooper.11.
+the loop position and gate mode in v4.30-duallooper.11, the playback window in
+v4.30-duallooper.12 (advertised as the `looper_window` capability; drag its edges on the
+waveform, double-click or Whole loop to reset).
 
 Two per-side `set_param` names have no Loop Monitor control but are used by the norns
 script (below): `looper_state` (as CC 80: 0 bypass/stop, 1 new recording, 2 playback,
@@ -148,9 +164,10 @@ v4.30-duallooper.11 and advertised as the `looper_state` and `looper_level` capa
 ## norns
 
 [`Tools/norns/wingie_monitor`](Tools/norns/wingie_monitor/README.md) is the Loop Monitor on
-norns, over the same serial protocol: both loops on the screen, record / play / overdub /
-stop on K2 and K3 (`looper_state`), speed on E3, and the Loop Monitor controls plus loop
-level (`looper_level`) and line input mono/stereo on a CTRL page. Opening the port from
+norns, over the same serial protocol: both loops on the screen, one LOOP page per loop with
+record / play / overdub / stop on K2 and K3 (`looper_state`) and the playback window on E2
+and E3 (`looper_start`/`looper_end`), and the Loop Monitor controls plus loop level
+(`looper_level`), the window and line input mono/stereo on a CTRL page. Opening the port from
 norns does not reset the Wingie2, so loops recorded before connecting are kept.
 
 ## CPU headroom

@@ -264,6 +264,16 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Playback window, as MIDI CC 90/91 but continuous: share of the recording
+    // (0-1, 1/10000 steps) where playback starts and ends. The audio task keeps it
+    // at least ~13 ms long; a new recording or clear resets it to 0-1. Runtime only.
+    const bool windowStart = strcmp(request.name, "looper_start") == 0;
+    if (windowStart || strcmp(request.name, "looper_end") == 0) {
+      if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.0001f, canonical)) return false;
+      dsp.setLooperWindow(ch, windowStart ? 0 : 1, canonical);
+      return true;
+    }
+
     // Looper sound on sound (as MIDI CC 83): runtime only, back to 80% at power-on.
     if (strcmp(request.name, "sos") == 0) {
       if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.01f, canonical)) return false;
@@ -587,6 +597,8 @@ void sendLoopStatus(uint32_t id) {
     side.speedMode = view.speedMode;
     side.post = view.post;
     side.gate = view.gate;
+    side.start = view.start;
+    side.end = view.end;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();
