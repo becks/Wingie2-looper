@@ -66,6 +66,9 @@ run independently and are not synchronized.
 | 89 | Gate mode | 0–63 off; 64–127 on (held keys and notes play the loop from its start) |
 | 90 | Playback window start | 0–127 = 0–100% of the recording |
 | 91 | Playback window end | 0–127 = 0–100% of the recording |
+| 92 | Side filter type | 0–31 off; 32–63 low pass; 64–95 high pass; 96–127 band pass |
+| 93 | Side filter cutoff | 0–127 = 20 Hz–16 kHz, exponential |
+| 94 | Side filter resonance | 0–127 = 0–100% |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -127,6 +130,17 @@ loop fades out (~2 ms, as a gate restart) and starts again from the window start
 reverse). A new recording or clear resets the window to the whole loop. `loop_status` reports
 it as `a[11]` and `a[12]` (shares of the length).
 
+Each side also has an output filter (`filter_type` 0 off, 1 low pass, 2 high pass, 3 band
+pass; `filter_cutoff` 20–16000 Hz; `filter_resonance` 0–1; per side, CC 92–94, Loop Monitor or
+norns; runtime only, off at power-on). It is a state-variable filter (12 dB/octave; low and
+high pass from Q 0.5 to ≈ 6.7, without self-oscillation; band pass at unity gain in its centre,
+narrower, from Q 1 to 10) applied last,
+after the resonator, the dry signal, pan and the loops, so it shapes everything the side
+plays. It acts on the output channel (A left, B right), which is the side as long as pan
+keeps the sides apart (the default). The cutoff glides over ~30 ms and type changes
+crossfade over one block, so moving it does not click. `loop_status` reports it per side as
+`f` = [type, cutoff, resonance]; `hello` advertises `side_filter`.
+
 Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
 over serial with `looper_level`, as the norns script does); there is no MIDI clock
@@ -151,7 +165,10 @@ The looper latch itself (boot B+B, the configuration page field) is new in v4.30
 live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-duallooper.10,
 the loop position and gate mode in v4.30-duallooper.11, the playback window in
 v4.30-duallooper.12 (advertised as the `looper_window` capability; drag its edges on the
-waveform, double-click or Whole loop to reset).
+waveform, double-click or Whole loop to reset), the side filter in v4.30-duallooper.13
+(Off/LP/HP/BP buttons, Cutoff and Res sliders under each side's header). Each side also has a
+Volume slider (`set_param` `volume`, as the panel knob, which takes over again when moved) and
+the loop Level becomes a slider (`looper_level`, with the `looper_level` capability).
 
 Two per-side `set_param` names have no Loop Monitor control but are used by the norns
 script (below): `looper_state` (as CC 80: 0 bypass/stop, 1 new recording, 2 playback,

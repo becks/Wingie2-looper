@@ -274,6 +274,27 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Side output filter, as MIDI CC 92-94: type 0 off, 1 low pass, 2 high pass,
+    // 3 band pass; cutoff 20-16000 Hz (1 Hz steps); resonance 0-1. Runtime only.
+    if (strcmp(request.name, "filter_type") == 0) {
+      int type;
+      if (!quantizeIntegerParameter(request.value, 0, wingie_loop::kFilterTypeCount - 1, type)) return false;
+      dsp.setSideFilter(ch, type, -1, -1);
+      canonical = type;
+      return true;
+    }
+    if (strcmp(request.name, "filter_cutoff") == 0) {
+      if (!quantizeParameter(request.value, wingie_loop::kFilterCutoffMin, wingie_loop::kFilterCutoffMax, 1.0f, canonical))
+        return false;
+      dsp.setSideFilter(ch, -1, canonical, -1);
+      return true;
+    }
+    if (strcmp(request.name, "filter_resonance") == 0) {
+      if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.01f, canonical)) return false;
+      dsp.setSideFilter(ch, -1, -1, canonical);
+      return true;
+    }
+
     // Looper sound on sound (as MIDI CC 83): runtime only, back to 80% at power-on.
     if (strcmp(request.name, "sos") == 0) {
       if (!quantizeParameter(request.value, 0.0f, 1.0f, 0.01f, canonical)) return false;
@@ -599,6 +620,9 @@ void sendLoopStatus(uint32_t id) {
     side.gate = view.gate;
     side.start = view.start;
     side.end = view.end;
+    side.filterType = view.filterType;
+    side.filterCutoff = view.filterCutoff;
+    side.filterResonance = view.filterResonance;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();

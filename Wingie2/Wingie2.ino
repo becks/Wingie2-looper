@@ -34,6 +34,7 @@
 #include "note_looper.h"
 #include "resonator_modes.h"
 #include "speed_steps.h"
+#include "side_filter.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
 #include <MIDI.h>

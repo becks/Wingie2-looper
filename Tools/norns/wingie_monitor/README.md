@@ -63,7 +63,8 @@ K2 on a stopped loop starts a **new** recording (the old loop is replaced), as M
 
 CTRL rows: speed (step), speed mode, SOS, loop level, mode, pan, gate, start and end of the
 playback window (in seconds into the recording; 1/1000 of it per step, more when turned fast;
-the edges never cross), position (pre/post the resonator), and the shared live input, looper
+the edges never cross), the side filter (type off/LP/HP/BP, cutoff in Hz, a semitone per
+step, and resonance; needs v4.30-duallooper.13), position (pre/post the resonator), and the shared live input, looper
 latch and line input mono/stereo. Line input
 mono/stereo is applied at once but kept over power-off only after a Save (configuration page,
 or both Mode buttons held for 3 s); the other rows behave like their MIDI CCs (runtime only,
