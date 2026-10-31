@@ -20,6 +20,7 @@ struct LoopView {
   bool reverse = false;
   int speedMode = 0;  // wingie_loop::SpeedMode
   bool post = false, gate = false;
+  float start = 0, end = 1;  // playback window, shares of the length
 };
 class Loop {
 public:
@@ -72,15 +73,76 @@ private:
     recordCount_ = 0;
   }
   void finishOverdub() {
-    if (!overdubCount_ || overdubIndex_ >= length_) return;
+    if (!overdubCount_ || overdubIndex_ >= span_ || begin_ + overdubIndex_ >= length_) return;
     float input = overdubInputSum_ / overdubCount_;
     float feedback = overdubFeedbackSum_ / overdubCount_;
-    at(overdubIndex_) = encode(decode(at(overdubIndex_)) * retention_ + input + feedback);
+    uint8_t& frame = at(begin_ + overdubIndex_);
+    frame = encode(decode(frame) * retention_ + input + feedback);
     overdubInputSum_ = 0;
     overdubFeedbackSum_ = 0;
     overdubCount_ = 0;
   }
   float retention_ = 0.8f;
+  // Playback window: shares of the recording (0-1) set by the control side, and the
+  // frames they cover for the current length. Playback, grains, edge fades and
+  // overdub all run on positions relative to begin_; the recording stays whole.
+  static constexpr size_t kMinSpan = 64;  // ~13 ms
+  float windowStart_ = 0, windowEnd_ = 1;
+  size_t begin_ = 0, span_ = 0;
+  // The window moved away from the play position: fade out (as a gate restart),
+  // then enter the new window at its start on the next block.
+  bool jump_ = false, jumpReady_ = false;
+  void windowFrames(size_t& begin, size_t& span) const {
+    const size_t length = length_;
+    size_t b = (size_t)(windowStart_ * length), e = (size_t)(windowEnd_ * length + 0.5f);
+    if (b > length) b = length;
+    if (e > length) e = length;
+    const size_t min = length < kMinSpan ? length : kMinSpan;
+    if (e < b + min) {
+      e = b + min;
+      if (e > length) { e = length; b = length - min; }
+    }
+    begin = b;
+    span = e - b;
+  }
+  // Takes the current window; a play position outside it starts it over (no fade:
+  // used on transport changes) or, from playback, requests the faded jump.
+  void updateWindow(bool fade, bool reverse) {
+    size_t begin, span;
+    windowFrames(begin, span);
+    if (jumpReady_) {
+      jump_ = jumpReady_ = false;
+      enterWindow(begin, span, reverse);
+      return;
+    }
+    if (begin == begin_ && span == span_) return;
+    if (!span_) fade = false;  // no window yet (a recording just closed)
+    const size_t absolute = begin_ + position_;
+    if (!jump_ && absolute >= begin && absolute < begin + span) {
+      finishOverdub();
+      overdubCount_ = 0;
+      position_ = absolute - begin;
+      begin_ = begin;
+      span_ = span;
+      cachedIndex_ = kNoCache;
+      headsPlaced_ = false;  // re-placed at the same offsets from the play position
+    } else if (fade) {
+      jump_ = true;  // keeps the old window until the fade is silent
+    } else {
+      jump_ = false;
+      enterWindow(begin, span, reverse);
+    }
+  }
+  void enterWindow(size_t begin, size_t span, bool reverse) {
+    finishOverdub();
+    overdubCount_ = 0;
+    begin_ = begin;
+    span_ = span;
+    position_ = reverse && span ? span - 1 : 0;
+    fraction_ = reverse ? 0.9999f : 0;
+    cachedIndex_ = kNoCache;
+    headsPlaced_ = false;
+  }
   // Live input mixed into playback (0 = the loop replaces it); overdub always uses -6 dB.
   float liveInput_ = 0;
   // After the resonator the input is the resonator output, which always passes at unity.
@@ -123,11 +185,11 @@ private:
     if (p >= lengthFx) p -= lengthFx;
     head.position = p;
   }
-  __attribute__((always_inline)) float read(Head& head, size_t length, float fadeScale, float fadeLength) const {
+  __attribute__((always_inline)) float read(Head& head, size_t begin, size_t length, float fadeScale, float fadeLength) const {
     size_t i = (size_t)(head.position >> kFxBits);
     if (i != head.cached) {
-      head.a = decode(get(i));
-      head.b = decode(get(i + 1 == length ? 0 : i + 1));
+      head.a = decode(get(begin + i));
+      head.b = decode(get(begin + (i + 1 == length ? 0 : i + 1)));
       head.cached = i;
     }
     float fraction = (head.position & ((1 << kFxBits) - 1)) * kFxInv;
@@ -171,7 +233,9 @@ private:
       }
     }
     if (k == n) return;
-    const size_t length = length_;
+    updateWindow(true, kReverse);
+    // From here on `length` is the window and positions are relative to `begin`.
+    const size_t begin = begin_, length = span_;
     const bool overdub = state_ == 3;
     const float fadeLength = length < 32 ? length * 0.25f : 8.0f;
     const float fadeScale = 1.0f / fadeLength;
@@ -182,7 +246,9 @@ private:
     // The gate applies to playback only: overdub always lets the loop be heard.
     const bool gating = gateMode_ && state_ == 2;
     const float gateTarget = gating && !gateOpen_ ? 0.0f : 1.0f;
-    restart = restart && gating;
+    // A window jump fades out like a gate restart, in every state.
+    restart = (restart && gating) || jump_;
+    bool jumpReady = false;
     float gate = gate_;
     // Grains need room for two of them inside the loop.
     const float width = length / 2 < kGrainFrames ? length / 2 : kGrainFrames;
@@ -209,16 +275,16 @@ private:
       // With grains only the heads read; the play position just keeps time.
       if (!grains && position != cached) {
         size_t next = position + 1 == length ? 0 : position + 1;
-        a = decode(at(position));
-        b = decode(at(next));
+        a = decode(at(begin + position));
+        b = decode(at(begin + next));
         cached = position;
       }
       float sample;
       const bool grainTick = grains && !grainSkip;
       if (grainTick) {
         float gain = 1.0f - fabsf(grain * gainScale - 1.0f);
-        float latest = gain * read(head0, length, fadeScale, fadeLength) +
-                       (1.0f - gain) * read(head1, length, fadeScale, fadeLength);
+        float latest = gain * read(head0, begin, length, fadeScale, fadeLength) +
+                       (1.0f - gain) * read(head1, begin, length, fadeScale, fadeLength);
         sample = 0.5f * (grainLast + latest);
         grainLast = latest;
       } else if (grains) {
@@ -283,7 +349,10 @@ private:
       // During overdub (and playback with live input on), let the player hear the
       // input as well as the existing loop. -6 dB keeps their combined drive controlled.
       output[k] = sample * smooth * gate + input[k] * inputGain;
-      if (restart && gate < kGateFloor) {
+      if (restart && !jumpReady && gate < kGateFloor && jump_) {
+        // Silent now: the next block enters the new window; stay silent until then.
+        jumpReady = true;
+      } else if (restart && !jumpReady && gate < kGateFloor) {
         // Silent now: jump to the loop start (the end in reverse) and re-place the grains.
         restart = false;
         position = kReverse ? length - 1 : 0;
@@ -297,7 +366,8 @@ private:
         }
       }
     }
-    restart_ = restart;
+    restart_ = restart && !jumpReady;
+    jumpReady_ = jumpReady;
     position_ = position;
     fraction_ = fraction;
     smooth_ = smooth;
@@ -325,7 +395,8 @@ public:
     capacity_ = capacity;
   }
   size_t length() const { return length_; }
-  size_t position() const { return position_; }
+  // Absolute frame, for display (the window offset plus the relative position).
+  size_t position() const { return begin_ + position_; }
   size_t capacity() const { return capacity_; }
   // Peak magnitude (0-127, mu-law segment and step) of each of `buckets` equal
   // slices of the loop. Called from another task while audio runs, so it may
@@ -358,19 +429,28 @@ public:
   void setGate(bool mode, bool open) { gateMode_ = mode; gateOpen_ = open; }
   // Audio task only: in gate mode, restart playback from the loop start.
   void retrigger() { restart_ = true; }
+  // Audio task only: the playback window as shares of the recording (0-1); it is
+  // applied at the next block, at least kMinSpan frames long.
+  void setWindow(float start, float end) {
+    windowStart_ = start < 0 ? 0 : start > 1 ? 1 : start;
+    windowEnd_ = end < 0 ? 0 : end > 1 ? 1 : end;
+  }
   void command(int value) {
     if (!capacity_) return;
     restart_ = false;
     cachedIndex_ = kNoCache;
     headsPlaced_ = false;
+    jump_ = jumpReady_ = false;
     if (value == 4) {
       length_ = 0; position_ = 0; fraction_ = 0; state_ = 0;
+      begin_ = span_ = 0;
       recordSum_ = overdubInputSum_ = overdubFeedbackSum_ = 0;
       recordCount_ = overdubCount_ = 0;
     }
     else if (value == 1) {
       if (state_ != 1) {
         length_ = 0; position_ = 0; fraction_ = 0; recordSum_ = 0; recordCount_ = 0;
+        begin_ = span_ = 0;
         overdubInputSum_ = overdubFeedbackSum_ = 0; overdubCount_ = 0;
       }
       state_ = 1;
@@ -379,7 +459,10 @@ public:
       if (state_ == 1) finishRecording();
       if (state_ == 3) finishOverdub();
       state_ = (value >= 2 && !length_) ? 0 : value;
-      if (state_ >= 2 && position_ >= length_) { position_ = 0; fraction_ = 0; }
+      if (state_ >= 2) {
+        updateWindow(false, false);
+        if (position_ >= span_) { position_ = 0; fraction_ = 0; }
+      }
       if (state_ == 3) overdubCount_ = 0;
     }
   }

@@ -33,6 +33,8 @@ class LooperDSP : public decorator_dsp {
   // Gate sources holding it open (wingie_loop::GateSource bits) and a pending restart, per side.
   std::atomic<uint8_t> gateSources_[2] {{0}, {0}};
   std::atomic<bool> retrigger_[2] {{false}, {false}};
+  // Playback window per side, shares of the recording; reset by a new recording or clear.
+  std::atomic<float> windowStart_[2] {{0}, {0}}, windowEnd_[2] {{1}, {1}};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -126,6 +128,8 @@ public:
     out.speedMode = speedMode_[ch].load();
     out.post = post_[ch].load();
     out.gate = gateMode_[ch].load();
+    out.start = windowStart_[ch].load();
+    out.end = windowEnd_[ch].load();
   }
   void peaks(int ch, uint8_t* out, size_t buckets) const {
     if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
@@ -150,6 +154,12 @@ public:
   void setLiveInput(bool on) { liveInput_.store(on); }
   void setPost(int ch, bool on) { if (ch >= 0 && ch < 2) post_[ch].store(on); }
   void setGateMode(int ch, bool on) { if (ch >= 0 && ch < 2) gateMode_[ch].store(on); }
+  // Playback window edge (0 start, 1 end) as a share of the recording, 0-1.
+  void setWindow(int ch, int edge, float value) {
+    if (ch < 0 || ch > 1 || !(value == value)) return;
+    value = std::max(0.0f, std::min(1.0f, value));
+    (edge ? windowEnd_ : windowStart_)[ch].store(value);
+  }
   // A gate source opens (and restarts the loop) or releases the side's gate.
   void gateNote(int ch, uint8_t source, bool on) {
     if (ch < 0 || ch > 1) return;
@@ -178,6 +188,8 @@ public:
       case 85: reverse_[ch].store(value >= 64); break;
       case 88: post_[ch].store(value >= 64); break;
       case 89: gateMode_[ch].store(value >= 64); break;
+      case 90: setWindow(ch, 0, value/127.0f); break;
+      case 91: setWindow(ch, 1, value/127.0f); break;
     }
   }
   // Fills out[] with average/peak cycles per block (total, looper only) and the
@@ -243,6 +255,8 @@ private:
     const bool liveInput = liveInput_.load();
     for (int ch=0; ch<2; ++ch) {
       int command = command_[ch].exchange(-1);
+      if (command == 1 || command == 4) { windowStart_[ch].store(0); windowEnd_[ch].store(1); }
+      loop_[ch].setWindow(windowStart_[ch].load(), windowEnd_[ch].load());
       if (command >= 0) loop_[ch].command(command);
       speed[ch]=std::max(0.25f, std::min(2.0f, speed_[ch].load()));
       reverse[ch]=reverse_[ch].load();

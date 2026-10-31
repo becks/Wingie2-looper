@@ -82,6 +82,11 @@ sequence plays. Overdub ignores the gate. Cave keys edit mutes and do not trigge
 Both settings are also available as MIDI CC 88 and 89 and in the Loop Monitor, and return to
 before the resonator with the gate off at power-on.
 
+Each loop also has a playback window: its start and end (MIDI CC 90 and 91, the Loop Monitor
+by dragging the edges on the waveform, or the norns CTRL page) choose the part of the recording
+that plays. The rest is kept, so widening the window brings it back; a new recording or clear
+plays the whole loop again. See [`DUAL_LOOPER.md`](DUAL_LOOPER.md).
+
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 
@@ -107,10 +112,10 @@ looper latch needs v4.30-duallooper.8 or later and live input v4.30-duallooper.9
 [`Tools/norns/wingie_monitor`](Tools/norns/wingie_monitor) is a [norns](https://monome.org/docs/norns/)
 script that shows both loopers on the norns screen and drives them from its keys and
 encoders over the Wingie2's USB serial port (one USB cable, no MIDI interface): record,
-play, overdub and stop, speed and loop level, plus every Loop Monitor control, the note
-loops, the panel state and the input/output meters. It needs norns 250926 or later (with
-the `serial` module) and firmware v4.30-duallooper.11 or later for the transport and loop
-level. To install it, paste this line in the maiden REPL (norns.local in a browser):
+play, overdub and stop, the playback window, speed and loop level, plus every Loop Monitor
+control, the note loops, the panel state and the input/output meters. It needs norns 250926
+or later (with the `serial` module) and firmware v4.30-duallooper.11 or later for the
+transport and loop level (v4.30-duallooper.12 for the playback window). To install it, paste this line in the maiden REPL (norns.local in a browser):
 
 ```lua
 os.execute("rm -rf /tmp/wl && git clone -q --depth 1 https://github.com/becks/Wingie2-looper /tmp/wl && rm -rf /home/we/dust/code/wingie_monitor && cp -r /tmp/wl/Tools/norns/wingie_monitor /home/we/dust/code/ && rm -rf /tmp/wl && sync")

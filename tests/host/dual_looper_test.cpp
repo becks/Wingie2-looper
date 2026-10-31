@@ -264,4 +264,80 @@ int main() {
     for (int i = 0; i < 400; ++i) last = g.process(0, 1, 1, 1, 0);
     assert(g.state() == 2);
   }
+
+  // Playback window: start/end as shares of the recording.
+  {
+    std::vector<uint8_t> buf(1000);
+    wingie_loop::Loop w;
+    w.attach(buf.data(), buf.size());
+    w.command(1);
+    for (int i = 0; i < 1000 * 9; ++i) w.process(i < 400 * 9 ? 0.5f : i < 800 * 9 ? -0.5f : 0.25f, 1, 1, 1, 0);
+    assert(w.state() == 2 && w.length() == 1000);
+    for (int i = 0; i < 100 * 9; ++i) w.process(0, 1, 1, 1, 0);
+    assert(w.position() < 400);
+    // Window away from the play position: fade out, enter it at its start, no click.
+    w.setWindow(0.4f, 0.8f);
+    float previous = w.process(0, 1, 1, 1, 0), biggest = 0;
+    for (int i = 0; i < 400; ++i) {
+      float x = w.process(0, 1, 1, 1, 0);
+      biggest = std::max(biggest, std::abs(x - previous));
+      previous = x;
+    }
+    assert(biggest < .05f && previous < -.4f);
+    assert(w.position() >= 400 && w.position() < 460);
+    // Playback stays inside it, wrapping at its end.
+    float highest = -1;
+    for (int i = 0; i < 2000 * 9; ++i) {
+      highest = std::max(highest, w.process(0, 1, 1, 1, 0));
+      assert(w.position() >= 400 && w.position() < 800);
+    }
+    assert(highest < .01f);
+    assert(w.takeWrapped());
+    // Moving an edge while the play position stays inside does not move it.
+    size_t before = w.position();
+    w.setWindow(0.3f, 0.8f);
+    w.process(0, 1, 1, 1, 0);
+    assert(w.position() >= before && w.position() <= before + 1);
+    w.setWindow(0.4f, 0.8f);
+    // Reverse wraps inside the window too.
+    for (int i = 0; i < 2000 * 9; ++i) {
+      w.processReverse(0, 1, 1, 1, 0);
+      assert(w.position() >= 400 && w.position() < 800);
+    }
+    // Pitch shift (grains) reads inside the window.
+    float in = 0, out = 0;
+    for (int i = 0; i < 2000 * 9; ++i) {
+      w.process(&in, &out, 1, 1.0f / 9, 1, 1, nullptr, 0, 1.5f);
+      assert(std::isfinite(out) && out < .01f);
+      assert(w.position() >= 400 && w.position() < 800);
+    }
+    // Overdub writes only inside the window.
+    w.command(3);
+    for (int i = 0; i < 1000 * 9; ++i) w.process(0.2f, 1, 1, 1, 0);
+    w.command(2);
+    w.setWindow(0, 0.3f);
+    for (int i = 0; i < 500; ++i) w.process(0, 1, 1, 1, 0);
+    for (int i = 0; i < 200 * 9; ++i) {
+      float x = w.process(0, 1, 1, 1, 0);
+      size_t p = w.position();
+      if (p > 10 && p < 290) assert(std::abs(x - 0.5f) < .03f);
+    }
+    // Start past the end: the window is kept at its minimum length.
+    w.setWindow(0.9f, 0.5f);
+    for (int i = 0; i < 500; ++i) w.process(0, 1, 1, 1, 0);
+    for (int i = 0; i < 1000 * 9; ++i) {
+      w.process(0, 1, 1, 1, 0);
+      assert(w.position() >= 900 && w.position() < 964);
+    }
+    // Clear forgets the window frames; a new recording plays whole.
+    w.command(4);
+    w.setWindow(0, 1);
+    w.command(1);
+    for (int i = 0; i < 300 * 9; ++i) w.process(0.5f, 1, 1, 1, 0);
+    w.command(2);
+    for (int i = 0; i < 600 * 9; ++i) {
+      w.process(0, 1, 1, 1, 0);
+      assert(w.position() < 300);
+    }
+  }
 }

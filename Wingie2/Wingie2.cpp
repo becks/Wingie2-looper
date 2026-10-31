@@ -14403,6 +14403,10 @@ void Wingie2::setLooperGateMode(int ch, bool on) {
     static_cast<LooperDSP*>(fDSP)->setGateMode(ch, on);
 }
 
+void Wingie2::setLooperWindow(int ch, int edge, float value) {
+    static_cast<LooperDSP*>(fDSP)->setWindow(ch, edge, value);
+}
+
 void Wingie2::looperGateNote(int ch, uint8_t source, bool on) {
     static_cast<LooperDSP*>(fDSP)->gateNote(ch, source, on);
 }
