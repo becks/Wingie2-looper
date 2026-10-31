@@ -3,6 +3,7 @@
 #include "dual_looper.h"
 #include "level_meter.h"
 #include "speed_steps.h"
+#include "side_filter.h"
 #include <atomic>
 #include <Arduino.h>
 #include "esp_heap_caps.h"
@@ -35,6 +36,11 @@ class LooperDSP : public decorator_dsp {
   std::atomic<bool> retrigger_[2] {{false}, {false}};
   // Playback window per side, shares of the recording; reset by a new recording or clear.
   std::atomic<float> windowStart_[2] {{0}, {0}}, windowEnd_[2] {{1}, {1}};
+  // Output filter per side (output channel 0 = A/left, 1 = B/right), after the
+  // resonator, pan and loops: type (wingie_loop::FilterType), cutoff Hz, resonance 0-1.
+  wingie_loop::SideFilter filter_[2];
+  std::atomic<int> filterType_[2] {{0}, {0}};
+  std::atomic<float> filterCutoff_[2] {{1000}, {1000}}, filterResonance_[2] {{0}, {0}};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -130,6 +136,19 @@ public:
     out.gate = gateMode_[ch].load();
     out.start = windowStart_[ch].load();
     out.end = windowEnd_[ch].load();
+    out.filterType = filterType_[ch].load();
+    out.filterCutoff = filterCutoff_[ch].load();
+    out.filterResonance = filterResonance_[ch].load();
+  }
+  void setFilterType(int ch, int type) {
+    if (ch >= 0 && ch < 2 && type >= 0 && type < wingie_loop::kFilterTypeCount) filterType_[ch].store(type);
+  }
+  void setFilterCutoff(int ch, float hz) {
+    if (ch < 0 || ch > 1 || !(hz == hz)) return;
+    filterCutoff_[ch].store(std::max(wingie_loop::kFilterCutoffMin, std::min(wingie_loop::kFilterCutoffMax, hz)));
+  }
+  void setFilterResonance(int ch, float value) {
+    if (ch >= 0 && ch < 2 && value == value) filterResonance_[ch].store(std::max(0.0f, std::min(1.0f, value)));
   }
   void peaks(int ch, uint8_t* out, size_t buckets) const {
     if (ch >= 0 && ch < 2) loop_[ch].peaks(out, buckets);
@@ -190,6 +209,9 @@ public:
       case 89: gateMode_[ch].store(value >= 64); break;
       case 90: setWindow(ch, 0, value/127.0f); break;
       case 91: setWindow(ch, 1, value/127.0f); break;
+      case 92: setFilterType(ch, wingie_loop::filterTypeFromCC(value)); break;
+      case 93: setFilterCutoff(ch, wingie_loop::filterCutoffFromCC(value)); break;
+      case 94: setFilterResonance(ch, value/127.0f); break;
     }
   }
   // Fills out[] with average/peak cycles per block (total, looper only) and the
@@ -248,7 +270,16 @@ private:
     else
       loop_[ch].process(input, output, n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
   }
+  // Resonators and loops, then the side filters last so they shape the whole side:
+  // resonator, dry signal and loops (included in the profile's total).
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
+    computeLoops(count, inputs, outputs);
+    const float rate = (float)getSampleRate();
+    for (int ch = 0; ch < 2; ++ch)
+      filter_[ch].process(outputs[ch], count, filterType_[ch].load(), filterCutoff_[ch].load(),
+                          filterResonance_[ch].load(), rate > 0 ? rate : 44100.0f);
+  }
+  void computeLoops(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
     float speed[2], level[2], retention[2], cross[2];
     bool reverse[2], post[2];
     int mode[2];

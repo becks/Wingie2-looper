@@ -14407,6 +14407,14 @@ void Wingie2::setLooperWindow(int ch, int edge, float value) {
     static_cast<LooperDSP*>(fDSP)->setWindow(ch, edge, value);
 }
 
+// Negative values leave that setting unchanged.
+void Wingie2::setSideFilter(int ch, int type, float cutoff, float resonance) {
+    LooperDSP* looper = static_cast<LooperDSP*>(fDSP);
+    if (type >= 0) looper->setFilterType(ch, type);
+    if (cutoff >= 0) looper->setFilterCutoff(ch, cutoff);
+    if (resonance >= 0) looper->setFilterResonance(ch, resonance);
+}
+
 void Wingie2::looperGateNote(int ch, uint8_t source, bool on) {
     static_cast<LooperDSP*>(fDSP)->gateNote(ch, source, on);
 }

@@ -166,7 +166,7 @@ void handleControlChange (byte channel, byte number, byte value) {
 }
 
 void MIDISetParam(int ch, byte number, byte value) {
-  if (number >= 80 && number <= 91) {
+  if (number >= 80 && number <= 94) {
     dsp.setLooperControl(ch, number, value);
     return;
   }

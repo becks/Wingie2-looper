@@ -27,6 +27,7 @@ local MODES = {"Poly", "String", "Bar", "Cave", "Ratio", "Piano", "Tube", "Membr
 local SPEED_STEPS = {1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2}
 local SPEED_LABELS = {"1/4", "1/2", "2/3", "3/4", "1", "4/3", "3/2", "2"}
 local SPEED_MODES = {"vari", "pitch", "strch"}
+local FILTER_TYPES = {"off", "LP", "HP", "BP"}
 local SIDE_NAMES = {"left", "right"}
 -- One LOOP page per loop (A, then B): its keys and encoders act on that loop.
 local PAGES = {"LOOP A", "LOOP B", "CTRL", "NOTES", "PANEL", "METERS", "SYS"}
@@ -50,6 +51,7 @@ local opened_at = 0
 local firmware = ""
 local has_state = false   -- firmware accepts set_param looper_state
 local has_window = false  -- firmware has the playback window (looper_start/end)
+local has_filter = false  -- firmware has the side output filter (filter_*)
 
 -- device model
 local status = nil
@@ -142,10 +144,11 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state, has_window = false, false
+      has_state, has_window, has_filter = false, false, false
       for _, c in ipairs(r.capabilities or {}) do
         if c == "looper_state" then has_state = true end
         if c == "looper_window" then has_window = true end
+        if c == "side_filter" then has_filter = true end
       end
       message = ""
       for _, s in ipairs(sides) do s.wave_length = -1 end
@@ -501,6 +504,18 @@ local ROWS = {
    get = function(s) return s.a[13] or 1 end,
    show = function(v, side) return window_label(v, side) end,
    step = function(v, d, side) return window_step(v, d, side, "end") end},
+  -- side output filter: type, cutoff (a semitone per step, more when turned fast), resonance
+  {label = "filter", name = "filter_type", filter = true,
+   get = function(s) return s.f and s.f[1] or 0 end,
+   show = function(v) return FILTER_TYPES[v + 1] or "?" end,
+   step = function(v, d) return util.clamp(v + d, 0, #FILTER_TYPES - 1) end},
+  {label = "cutoff", name = "filter_cutoff", filter = true,
+   get = function(s) return s.f and s.f[2] or 1000 end,
+   show = function(v) return v >= 1000 and string.format("%.1fk", v / 1000) or string.format("%d", math.floor(v + 0.5)) end,
+   step = function(v, d) return util.clamp(math.floor(v * 2 ^ (d * math.abs(d) / 12) + 0.5), 20, 16000) end},
+  {label = "reso", name = "filter_resonance", filter = true,
+   get = function(s) return s.f and s.f[3] or 0 end, show = pct,
+   step = function(v, d) return util.clamp(math.floor(v * 100 + 0.5 + d) / 100, 0, 1) end},
   {label = "position", name = "looper_post",
    get = function(s) return s.a[10] or 0 end,
    show = function(v) return v == 1 and "post" or "pre" end,
@@ -580,6 +595,11 @@ local function row_value(row, side)
 end
 
 local function change_row(row, side, d)
+  if row.filter and not has_filter then
+    message = "flash firmware with the filter"
+    clock.run(function() clock.sleep(2); message = "" end)
+    return
+  end
   if row.window and not has_window then
     message = "flash firmware with the loop window"
     clock.run(function() clock.sleep(2); message = "" end)

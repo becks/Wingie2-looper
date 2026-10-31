@@ -21,6 +21,9 @@ struct LoopView {
   int speedMode = 0;  // wingie_loop::SpeedMode
   bool post = false, gate = false;
   float start = 0, end = 1;  // playback window, shares of the length
+  // Side output filter (kept here so one view carries all per-side looper state).
+  int filterType = 0;
+  float filterCutoff = 1000, filterResonance = 0;
 };
 class Loop {
 public:

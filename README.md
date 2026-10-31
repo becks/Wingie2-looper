@@ -87,6 +87,10 @@ by dragging the edges on the waveform, or the norns CTRL page) choose the part o
 that plays. The rest is kept, so widening the window brings it back; a new recording or clear
 plays the whole loop again. See [`DUAL_LOOPER.md`](DUAL_LOOPER.md).
 
+Each side has an output filter too: low, high or band pass with cutoff and resonance (MIDI
+CC 92, 93 and 94, the Loop Monitor or the norns CTRL page). It shapes everything the side
+plays, resonator and loops included, and is off at power-on.
+
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 

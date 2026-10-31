@@ -126,6 +126,9 @@ struct LoopSideSnapshot {
   bool gate;  // gate mode: keys and notes play the loop from its start
   float start;  // playback window, shares of the length
   float end;
+  int filterType;  // side output filter: 0 off, 1 low, 2 high, 3 band pass
+  float filterCutoff;  // Hz
+  float filterResonance;  // 0-1
 };
 
 struct LoopStatusSnapshot {
@@ -232,7 +235,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));
@@ -348,6 +351,7 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 //     window start, window end] (frames; the window as shares of the length)
 // n: [state, events, length_ms, position_ms, revision]
 // x: [mix, decay, volume] as the DSP currently has them, then the side's pan
+// f: side output filter [type, cutoff Hz, resonance]
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
@@ -361,7 +365,7 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
   for (int ch = 0; ch < 2; ch++) {
     const LoopSideSnapshot &side = snapshot.side[ch];
     response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d,%.3f,%d,%d,%d,%.4f,%.4f],\"n\":[%d,%u,%lu,%lu,%lu],"
-                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f]}",
+                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f],\"f\":[%d,%.0f,%.2f]}",
                     ch ? "," : "", side.audioState, static_cast<unsigned long>(side.length),
                     static_cast<unsigned long>(side.position), static_cast<unsigned long>(side.capacity),
                     side.speed, side.level, side.reverse ? 1 : 0, side.retention, side.speedMode,
@@ -369,7 +373,8 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
                     static_cast<unsigned>(side.noteCount), static_cast<unsigned long>(side.notesLengthMs),
                     static_cast<unsigned long>(side.notesPositionMs),
                     static_cast<unsigned long>(side.notesRevision), side.mode, side.octave, side.note,
-                    static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan);
+                    static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan,
+                    side.filterType, side.filterCutoff, side.filterResonance);
   }
   response.append("],\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
                   snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");
