@@ -82,6 +82,15 @@ Reverse and cross-feedback have no serial command: use the panel or MIDI CC 85 a
   The SYS page shows round trips and timeouts.
 - **"load fail" after a reboot**: the files may have been corrupted by a reboot during a
   write (see the power supply above); install again.
+- **Digital noise when the Wingie2's audio out goes into the norns audio in**: a ground
+  loop. The Wingie2 has no battery and takes its power and ground over USB (from norns or a
+  computer), so the audio cable closes a second ground path and USB/digital noise reaches
+  the norns input. It is not the script: the noise is there with the Wingie2 on a computer
+  too, and it disappears when the Wingie2 runs from a USB power bank. To keep the serial
+  connection and clean audio, put a **USB isolator** (ADuM3160 type, 12 Mbps full speed;
+  pick one with an external power input, since many cannot supply much current on the
+  isolated side) between norns and the Wingie2, or a **ground loop isolator** (audio
+  transformer) on the audio cable. To play without the script, a power bank alone is enough.
 
 ## Notes for developers
 
