@@ -185,7 +185,8 @@ norns, over the same serial protocol: both loops on the screen, one LOOP page pe
 record / play / overdub / stop on K2 and K3 (`looper_state`) and the playback window on E2
 and E3 (`looper_start`/`looper_end`), and the Loop Monitor controls plus loop level
 (`looper_level`), the window and line input mono/stereo on a CTRL page. Opening the port from
-norns does not reset the Wingie2, so loops recorded before connecting are kept.
+norns does not reset the Wingie2, so loops recorded before connecting are kept. The same
+folder is also a norns mod, with the same pages in the system menu next to any other script.
 
 ## CPU headroom
 

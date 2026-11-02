@@ -127,8 +127,11 @@ os.execute("rm -rf /tmp/wl && git clone -q --depth 1 https://github.com/becks/Wi
 
 then load `wingie_monitor` from SELECT and connect the Wingie2 to a norns USB port with a data
 cable. norns powers the Wingie2 over USB: use a norns supply that holds 5.1 V / 3 A, or
-norns may reboot when the Wingie2 is plugged or unplugged. Pages, controls and
-troubleshooting: [`Tools/norns/wingie_monitor/README.md`](Tools/norns/wingie_monitor/README.md).
+norns may reboot when the Wingie2 is plugged or unplugged.
+
+The same folder is also a norns **mod**, with the same pages in the system menu, so you can
+control the Wingie2 while another script runs: enable it in SYSTEM → MODS (E3), then
+SYSTEM → RESTART. Pages, controls, the mod and troubleshooting: [`Tools/norns/wingie_monitor/README.md`](Tools/norns/wingie_monitor/README.md).
 
 ## Resonator modes
 

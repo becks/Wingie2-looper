@@ -52,7 +52,15 @@ The same folder is also a norns **mod**: the same pages in the system menu, next
 other script, so you can run a script on norns and control the Wingie2 at the same time.
 
 1. SYSTEM → MODS → `WINGIE_MONITOR`, E3 to enable it (a `+` appears), then SYSTEM → RESTART.
-2. SYSTEM → MODS → `WINGIE_MONITOR` (now with `>`) → K3 opens the pages.
+2. To open the pages: K1 for the system menu, then with E2 and K3 go to SYSTEM → MODS →
+   `WINGIE_MONITOR` (now with `>`) and press K3.
+
+To leave, press K1: you are back in the running script, and K1 again returns straight to the
+pages. Or turn E1 all the way left, past LOOP A, for the list of mods. Loops keep playing
+either way, since they run on the Wingie2.
+
+To disable the mod: SYSTEM → MODS → `WINGIE_MONITOR`, E3 (the `+` goes away), then
+SYSTEM → RESTART.
 
 | Control | In the mod |
 |---|---|
@@ -100,9 +108,12 @@ Reverse and cross-feedback have no serial command: use the panel or MIDI CC 85 a
 - **"waiting for Wingie2…"**: check the cable (data, not charge-only). Over SSH, `lsusb`
   should list `1a86:7523 QinHeng Electronics CH340`. Maiden prints every serial device the
   script sees (`wingie monitor: serial device …`); if the Wingie2 is not accepted, add its
-  `vendor`/`model` to `is_bridge` in the script.
+  `vendor`/`model` to `is_bridge` in `lib/core.lua`.
 - **"no answer: timeout"**: the port opened but the Wingie2 did not answer; reload the script.
   The SYS page shows round trips and timeouts.
+- **norns stuck after SYSTEM → RESTART, when you have used SSH since it booted**: seen once
+  with a restart sent from the REPL, with `JACK semaphore error` in the log. Turn norns off and
+  on again, or over SSH run `sudo systemctl stop "norns-*"; sudo systemctl start norns.target`.
 - **"load fail" after a reboot**: the files may have been corrupted by a reboot during a
   write (see the power supply above); install again.
 - **Digital noise when the Wingie2's audio out goes into the norns audio in**: a ground
