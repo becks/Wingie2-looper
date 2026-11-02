@@ -46,6 +46,28 @@ Opening the port from norns does not reset the Wingie2 (unlike the browser Loop 
 so loops recorded before connecting are kept. The browser Loop Monitor, the configuration
 page and the web flasher cannot use the Wingie2 while it is connected to norns.
 
+## As a mod
+
+The same folder is also a norns **mod**: the same pages in the system menu, next to any
+other script, so you can run a script on norns and control the Wingie2 at the same time.
+
+1. SYSTEM → MODS → `WINGIE_MONITOR`, E3 to enable it (a `+` appears), then SYSTEM → RESTART.
+2. SYSTEM → MODS → `WINGIE_MONITOR` (now with `>`) → K3 opens the pages.
+
+| Control | In the mod |
+|---|---|
+| K1 | to the running script; K1 again comes back to these pages |
+| E1 | page, as in the script; to the left of LOOP A, back to the list of mods |
+| K2, K3, E2, E3 | as in the script |
+
+The mod polls the Wingie2 only while its pages are showing, so it costs the running script
+nothing the rest of the time. Loading `wingie_monitor` as a script still works, with or
+without the mod. With the mod enabled, its code is loaded at startup: after updating the
+files, restart norns (SYSTEM → RESTART).
+
+While enabled, the mod takes every CH340 or CP210x serial device at startup, so another
+script cannot use one of these on the same norns; disable the mod for that.
+
 ## Pages
 
 E1 changes page.
@@ -94,6 +116,10 @@ Reverse and cross-feedback have no serial command: use the panel or MIDI CC 85 a
   transformer) on the audio cable. To play without the script, a power bank alone is enough.
 
 ## Notes for developers
+
+The code is in `lib/core.lua`; `wingie_monitor.lua` (script) and `lib/mod.lua` (mod) are thin
+front ends. The core avoids `clock.run` and recreates its metros, because loading any script
+cancels all clocks and frees all metros (`Script.clear`).
 
 Two norns (250926) `serial` quirks are handled in the script: devices are only offered to
 handlers when udev reports them, so a Wingie2 already plugged in is re-announced with
