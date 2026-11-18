@@ -117,8 +117,9 @@ the group is there next to any script's own params; with the script, in its PARA
 
 To map one, as for any norns param: K1 → PARAMS → MAP, open WINGIE2 and scroll to the param,
 K3 opens its mapping; on LEARN press K3, move the knob or press the button on the controller,
-then K2 to go back (the mapping is saved). The same page sets the range, accumulation and
-echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
+then K2 to go back. K2 is what saves the mapping (to the script's `.pmap` file and, with
+the mod, to the mod's own file): leaving with K1 keeps it only until another script loads.
+The same page sets the range, accumulation and echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
 
 - **mode**, **speed**, **filter** and the other lists step through their choices along the
   knob's travel; **loop post**, **loop gate**, **live input**, **latch** and **line in mono**
