@@ -109,6 +109,7 @@ level and direction, the panel keys and controls, the looper latch (Locked while
 side's Mode select (any of the [resonator modes](#resonator-modes), v4.30-duallooper.10 or later), Keys select ([what the keys play](#keys-play-the-loop), v4.30-duallooper.14 or later), Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
 (varispeed / pitch / stretch, MIDI CC 87), speed step buttons (the same steps as F/G, MIDI CC 86)
+a Reverse toggle per side (v4.30-duallooper.14 or later, MIDI CC 85),
 and the Looper latch and Live input in playback checkboxes (running state, saved like the other
 settings). Open it from disk in
 desktop Chrome or Edge (Web Serial) and press Connect. Close it before using the Arduino serial

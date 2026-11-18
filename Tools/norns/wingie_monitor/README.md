@@ -96,14 +96,16 @@ resonator, loop or both; needs v4.30-duallooper.14), pan, gate (off, hold, one-s
 trigger; off/hold only before v4.30-duallooper.14), start and end of the
 playback window (in seconds into the recording; 1/1000 of it per step, more when turned fast;
 the edges never cross), the side filter (type off/LP/HP/BP, cutoff in Hz, a semitone per
-step, and resonance; needs v4.30-duallooper.13), position (pre/post the resonator), and the shared live input, looper
+step, and resonance; needs v4.30-duallooper.13), reverse (needs v4.30-duallooper.14), position
+(pre/post the resonator), and the shared live input, looper
 latch and line input mono/stereo. Line input
 mono/stereo is applied at once but kept over power-off only after a Save (configuration page,
 or both Mode buttons held for 3 s); the other rows behave like their MIDI CCs (runtime only,
 except the latch and live input, saved like the other settings). A value just sent is shown
 straight away and the polled state takes over after 0.6 s.
 
-Reverse and cross-feedback have no serial command: use the panel or MIDI CC 85 and 84.
+Cross-feedback has no serial command: use MIDI CC 84. Reverse needs v4.30-duallooper.14 or
+later (before it, use the panel's B or MIDI CC 85).
 
 ## MIDI controller (PARAMS)
 
@@ -114,7 +116,7 @@ the group is there next to any script's own params; with the script, in its PARA
 | Params | Per side (A and B) | Shared |
 |---|---|---|
 | Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance | pre clip gain, post clip gain, line in mono |
-| Looper | speed, speed mode, sos, loop level, loop start, loop end, loop post, loop gate | live input, latch |
+| Looper | speed, speed mode, sos, loop level, loop start, loop end, loop reverse, loop post, loop gate | live input, latch |
 | Buttons | rec / dub, stop / play, clear | |
 
 To map one, as for any norns param: K1 → PARAMS → MAP, open WINGIE2 and scroll to the param,
@@ -124,8 +126,8 @@ the mod, to the mod's own file): leaving with K1 keeps it only until another scr
 The same page sets the range, accumulation and echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
 
 - **mode**, **keys play**, **speed**, **filter**, **loop gate** (off, hold, one-shot, trigger)
-  and the other lists step through their choices along the knob's travel; **loop post**,
-  **live input**, **latch** and **line in mono** are toggles (a button press switches them).
+  and the other lists step through their choices along the knob's travel; **loop reverse**,
+  **loop post**, **live input**, **latch** and **line in mono** are toggles (a button press switches them).
 - **rec / dub**, **stop / play** and **clear** are buttons, as K2 and K3 on the LOOP pages:
   rec / dub records, then closes the loop and plays, then switches play ↔ overdub;
   stop / play stops or plays (a recording closes and plays). **clear** empties the loop at

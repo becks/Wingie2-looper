@@ -178,7 +178,9 @@ SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step
 (`set_param` `speed_step`, 0–7), After resonator and Gate toggles (`set_param`
 `looper_post` 0/1 and `looper_gate` 0–3, the Gate button stepping through the modes with
 `gate_modes`; `loop_status` `a[9]` and `a[10]`; hidden without the
-`looper_routing` capability), and the Looper latch and Live input in playback checkboxes
+`looper_routing` capability), a Reverse toggle (`set_param` `looper_reverse` 0/1, as CC 85
+and the panel's B; `loop_status` `a[6]`; shown with the `looper_reverse` capability), and the
+Looper latch and Live input in playback checkboxes
 (shared `looper_latch` and `looper_live_input`), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or
 later (advertised as the `speed_steps` and `speed_modes` capabilities in `hello`), and the looper
