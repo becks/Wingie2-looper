@@ -691,6 +691,13 @@
               <label for="wg-left-pan" data-i18n-zh="声像（0 = 左，1 = 右）" data-i18n-en="Pan (0 = left, 1 = right)"></label>
               <div class="wg-pan-edit"><input id="wg-left-pan" class="wg-number" data-value-key="param:left:pan" type="text" inputmode="decimal" disabled><input type="range" data-range-key="param:left:pan" data-i18n-aria-zh="左声像推杆" data-i18n-aria-en="Left pan slider" disabled></div>
             </div>
+            <div class="wg-field">
+              <label for="wg-left-key-target" data-i18n-zh="音符键演奏" data-i18n-en="Keys Play"></label>
+              <select id="wg-left-key-target" class="wg-select" data-value-key="param:left:key_target" disabled>
+                <option value="0" data-i18n-zh="共鸣器" data-i18n-en="Resonator"></option><option value="1" data-i18n-zh="循环（移调）" data-i18n-en="Loop (transpose)"></option><option value="2" data-i18n-zh="两者" data-i18n-en="Both"></option>
+              </select>
+              <span class="wg-help" data-i18n-zh="中间八度的 C = 循环原调；MIDI CC 95" data-i18n-en="C in the middle octave plays the loop as recorded; MIDI CC 95"></span>
+            </div>
           </div>
           <div class="wg-divider"></div>
           <div class="wg-bank-head">
@@ -725,6 +732,13 @@
             <div class="wg-field wg-field-pan">
               <label for="wg-right-pan" data-i18n-zh="声像（0 = 左，1 = 右）" data-i18n-en="Pan (0 = left, 1 = right)"></label>
               <div class="wg-pan-edit"><input id="wg-right-pan" class="wg-number" data-value-key="param:right:pan" type="text" inputmode="decimal" disabled><input type="range" data-range-key="param:right:pan" data-i18n-aria-zh="右声像推杆" data-i18n-aria-en="Right pan slider" disabled></div>
+            </div>
+            <div class="wg-field">
+              <label for="wg-right-key-target" data-i18n-zh="音符键演奏" data-i18n-en="Keys Play"></label>
+              <select id="wg-right-key-target" class="wg-select" data-value-key="param:right:key_target" disabled>
+                <option value="0" data-i18n-zh="共鸣器" data-i18n-en="Resonator"></option><option value="1" data-i18n-zh="循环（移调）" data-i18n-en="Loop (transpose)"></option><option value="2" data-i18n-zh="两者" data-i18n-en="Both"></option>
+              </select>
+              <span class="wg-help" data-i18n-zh="中间八度的 C = 循环原调；MIDI CC 95" data-i18n-en="C in the middle octave plays the loop as recorded; MIDI CC 95"></span>
             </div>
           </div>
           <div class="wg-divider"></div>
@@ -827,9 +841,11 @@
         "param:left:mode": {target: "left", name: "mode", path: ["left", "mode"], min: 0, max: 4, step: 1, immediate: true},
         "param:left:threshold": {target: "left", name: "threshold", path: ["left", "threshold"], min: 0.0825, max: 0.99, step: 0.0825},
         "param:left:pan": {target: "left", name: "pan", path: ["left", "pan"], min: 0, max: 1, step: 0.01},
+        "param:left:key_target": {target: "left", name: "key_target", path: ["left", "key_target"], min: 0, max: 2, step: 1, immediate: true},
         "param:right:mode": {target: "right", name: "mode", path: ["right", "mode"], min: 0, max: 4, step: 1, immediate: true},
         "param:right:threshold": {target: "right", name: "threshold", path: ["right", "threshold"], min: 0.0825, max: 0.99, step: 0.0825},
         "param:right:pan": {target: "right", name: "pan", path: ["right", "pan"], min: 0, max: 1, step: 0.01},
+        "param:right:key_target": {target: "right", name: "key_target", path: ["right", "key_target"], min: 0, max: 2, step: 1, immediate: true},
         "param:shared:a3_hz": {target: "shared", name: "a3_hz", path: ["shared", "a3_hz"], min: 358.08, max: 521.91, step: 0.01},
         "param:shared:tuning": {target: "shared", name: "tuning", path: ["shared", "tuning"], min: -1, max: 7, step: 1, immediate: true},
         "param:shared:pre_clip_gain": {target: "shared", name: "pre_clip_gain", path: ["shared", "pre_clip_gain"], min: 0.0825, max: 0.99, step: 0.0825},

@@ -30,7 +30,8 @@ class LooperDSP : public decorator_dsp {
   std::atomic<bool> reverse_[2] {{false}, {false}}, filled_[2] {{false}, {false}}, wrapped_[2] {{false}, {false}};
   std::atomic<bool> liveInput_ {false};
   // Loop after the resonator (records and plays its output) and gate mode, per side.
-  std::atomic<bool> post_[2] {{false}, {false}}, gateMode_[2] {{false}, {false}};
+  std::atomic<bool> post_[2] {{false}, {false}};
+  std::atomic<int> gateMode_[2] {{wingie_loop::kGateOff}, {wingie_loop::kGateOff}};
   // Gate sources holding it open (wingie_loop::GateSource bits) and a pending restart, per side.
   std::atomic<uint8_t> gateSources_[2] {{0}, {0}};
   std::atomic<bool> retrigger_[2] {{false}, {false}};
@@ -127,7 +128,7 @@ public:
     out.length = loop.length();
     out.position = loop.position();
     out.capacity = loop.capacity();
-    out.speed = std::max(0.25f, std::min(2.0f, speed_[ch].load()));
+    out.speed = std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kEngineSpeedMax, speed_[ch].load()));
     out.level = level_[ch].load();
     out.reverse = reverse_[ch].load();
     out.retention = retention_[ch].load();
@@ -165,6 +166,11 @@ public:
     if (ch >= 0 && ch < 2)
       speed_[ch].store(std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kSpeedMax, value)));
   }
+  // A note key's transposition (key_target.h): up to 4x.
+  void setKeySpeed(int ch, float value) {
+    if (ch >= 0 && ch < 2)
+      speed_[ch].store(std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kEngineSpeedMax, value)));
+  }
   // What the speed acts on: varispeed, pitch only or tempo only (SpeedMode).
   void setSpeedMode(int ch, int mode) {
     if (ch >= 0 && ch < 2 && mode >= 0 && mode < wingie_loop::kSpeedModeCount) speedMode_[ch].store(mode);
@@ -172,7 +178,10 @@ public:
   // Both sides: keep the live input audible (-6 dB) while a loop plays.
   void setLiveInput(bool on) { liveInput_.store(on); }
   void setPost(int ch, bool on) { if (ch >= 0 && ch < 2) post_[ch].store(on); }
-  void setGateMode(int ch, bool on) { if (ch >= 0 && ch < 2) gateMode_[ch].store(on); }
+  void setGateMode(int ch, int mode) {
+    if (ch >= 0 && ch < 2 && mode >= wingie_loop::kGateOff && mode < wingie_loop::kGateModeCount)
+      gateMode_[ch].store(mode);
+  }
   // Playback window edge (0 start, 1 end) as a share of the recording, 0-1.
   void setWindow(int ch, int edge, float value) {
     if (ch < 0 || ch > 1 || !(value == value)) return;
@@ -206,7 +215,7 @@ public:
       case 84: cross_[ch].store(0.25f * value/127.0f); break;
       case 85: reverse_[ch].store(value >= 64); break;
       case 88: post_[ch].store(value >= 64); break;
-      case 89: gateMode_[ch].store(value >= 64); break;
+      case 89: gateMode_[ch].store(wingie_loop::gateModeFromCC(value)); break;
       case 90: setWindow(ch, 0, value/127.0f); break;
       case 91: setWindow(ch, 1, value/127.0f); break;
       case 92: setFilterType(ch, wingie_loop::filterTypeFromCC(value)); break;
@@ -289,7 +298,7 @@ private:
       if (command == 1 || command == 4) { windowStart_[ch].store(0); windowEnd_[ch].store(1); }
       loop_[ch].setWindow(windowStart_[ch].load(), windowEnd_[ch].load());
       if (command >= 0) loop_[ch].command(command);
-      speed[ch]=std::max(0.25f, std::min(2.0f, speed_[ch].load()));
+      speed[ch]=std::max(wingie_loop::kSpeedMin, std::min(wingie_loop::kEngineSpeedMax, speed_[ch].load()));
       reverse[ch]=reverse_[ch].load();
       mode[ch]=speedMode_[ch].load();
       level[ch]=level_[ch].load();

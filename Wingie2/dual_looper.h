@@ -12,6 +12,20 @@
 namespace wingie_loop {
 // What holds a side's gate open (bits): panel keys, MIDI notes, the note looper.
 enum GateSource : uint8_t { kGatePanel = 1, kGateMidi = 2, kGateNoteLoop = 4 };
+// Gate modes: off (the loop plays freely); hold (a key restarts it and it loops while
+// held); one-shot (a key restarts it and it plays once, stopping early on release);
+// trigger (a key restarts it and it plays once to the end, whatever the release).
+enum GateMode { kGateOff = 0, kGateHold = 1, kGateOneShot = 2, kGateTrigger = 3, kGateModeCount = 4 };
+inline const char* gateModeName(int mode) {
+  static const char* const names[kGateModeCount] = {"off", "hold", "one-shot", "trigger"};
+  return mode >= 0 && mode < kGateModeCount ? names[mode] : "?";
+}
+// CC 89: 0-31 off, 32-63 hold, 64-95 one-shot, 96-127 trigger.
+inline int gateModeFromCC(int value) {
+  if (value < 0) value = 0;
+  if (value > 127) value = 127;
+  return value / 32;
+}
 // Display snapshot of one audio loop for the Loop Monitor.
 struct LoopView {
   int state = 0;
@@ -19,7 +33,8 @@ struct LoopView {
   float speed = 1, level = 1, retention = 0.8f;
   bool reverse = false;
   int speedMode = 0;  // wingie_loop::SpeedMode
-  bool post = false, gate = false;
+  bool post = false;
+  int gate = kGateOff;  // GateMode
   float start = 0, end = 1;  // playback window, shares of the length
   // Side output filter (kept here so one view carries all per-side looper state).
   int filterType = 0;
@@ -152,8 +167,11 @@ private:
   bool post_ = false;
   // Gate mode: playback is heard only while the gate is open, and a trigger
   // restarts the loop once the gate has faded out (~2 ms), so retriggers do not click.
+  // In one-shot and trigger modes the gate also closes when playback wraps (the shot
+  // is done) and stays closed until the next trigger restarts it.
   static constexpr float kGateRate = 0.05f, kGateFloor = 0.01f;
-  bool gateMode_ = false, gateOpen_ = false, restart_ = false;
+  int gateMode_ = kGateOff;
+  bool gateOpen_ = false, restart_ = false, shotDone_ = true;
   float gate_ = 1;
   // Decoded neighbours of the current frame; they change only every ~9 samples.
   static constexpr size_t kNoCache = ~size_t(0);
@@ -247,8 +265,12 @@ private:
     if (overdub) retention_ = retention;
     const float inputGain = post_ ? 1.0f : overdub ? 0.5f : liveInput_;
     // The gate applies to playback only: overdub always lets the loop be heard.
-    const bool gating = gateMode_ && state_ == 2;
-    const float gateTarget = gating && !gateOpen_ ? 0.0f : 1.0f;
+    const bool gating = gateMode_ != kGateOff && state_ == 2;
+    const bool shot = gating && gateMode_ >= kGateOneShot;
+    // Trigger plays the shot through whatever the keys do; hold and one-shot need them held.
+    const bool held = gateMode_ == kGateTrigger || gateOpen_;
+    bool shotDone = shotDone_;
+    float gateTarget = gating && (!held || (shot && shotDone)) ? 0.0f : 1.0f;
     // A window jump fades out like a gate restart, in every state.
     restart = (restart && gating) || jump_;
     bool jumpReady = false;
@@ -314,19 +336,26 @@ private:
         if (feedback && cross != 0) overdubFeedbackSum_ += cross * feedback[k];
         overdubCount_++;
       }
+      bool wrapped = false;
       if (kReverse) {
         fraction -= step;
         while (fraction < 0) {
           fraction += 1;
           if (position) --position;
-          else { position = length - 1; wrapped_ = true; }
+          else { position = length - 1; wrapped = true; }
         }
       } else {
         fraction += step;
         while (fraction >= 1) {
           fraction -= 1;
-          if (++position >= length) { position = 0; wrapped_ = true; }
+          if (++position >= length) { position = 0; wrapped = true; }
         }
+      }
+      if (wrapped) {
+        wrapped_ = true;
+        // One pass played: the gate closes until the next trigger (the edge fade
+        // has already brought the end down, so this fades a silent start).
+        if (shot && !restart) { shotDone = true; gateTarget = 0.0f; }
       }
       if (grains) grainSkip = !grainSkip;
       if (grainTick) {
@@ -361,6 +390,8 @@ private:
         position = kReverse ? length - 1 : 0;
         fraction = kReverse ? 0.9999f : 0;
         cached = kNoCache;
+        // A new shot starts here.
+        if (shot) { shotDone = false; gateTarget = held ? 1.0f : 0.0f; }
         if (grains) {
           grain = 0;
           place(head0, position, fraction, 0, lengthFx);
@@ -370,6 +401,7 @@ private:
       }
     }
     restart_ = restart && !jumpReady;
+    shotDone_ = shotDone;
     jumpReady_ = jumpReady;
     position_ = position;
     fraction_ = fraction;
@@ -428,8 +460,14 @@ public:
   void setLiveInput(bool on) { liveInput_ = on ? 0.5f : 0; }
   // Audio task only: the loop sits after the resonator, so the input passes at unity.
   void setPost(bool on) { post_ = on; }
-  // Audio task only: gate mode and whether a key or note holds the gate open.
-  void setGate(bool mode, bool open) { gateMode_ = mode; gateOpen_ = open; }
+  // Audio task only: gate mode (GateMode) and whether a key or note holds the gate
+  // open. Entering one-shot or trigger waits for a key before playing.
+  void setGate(int mode, bool open) {
+    if (mode < kGateOff || mode >= kGateModeCount) mode = kGateOff;
+    if (mode != gateMode_ && mode >= kGateOneShot) shotDone_ = true;
+    gateMode_ = mode;
+    gateOpen_ = open;
+  }
   // Audio task only: in gate mode, restart playback from the loop start.
   void retrigger() { restart_ = true; }
   // Audio task only: the playback window as shares of the recording (0-1); it is

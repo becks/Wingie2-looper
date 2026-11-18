@@ -9,6 +9,9 @@ constexpr int kUnisonStep = 4;
 constexpr float kSpeedSteps[kSpeedStepCount] = {
   0.25f, 0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 4.0f / 3.0f, 1.5f, 2.0f};
 constexpr float kSpeedMin = 0.25f, kSpeedMax = 2.0f;
+// The engine plays up to 4x: the note keys transpose the loop two octaves up
+// (key_target.h); the steps, CC 81 and the panel jumps stay within 0.25-2x.
+constexpr float kEngineSpeedMax = 4.0f;
 // Speeds within this of a step count as that step (CC 81 is continuous).
 constexpr float kSpeedStepTolerance = 0.002f;
 
@@ -32,12 +35,14 @@ inline float speedStepDown(float speed) {
 inline float speedStepUp(float speed) {
   for (int i = 0; i < kSpeedStepCount; ++i)
     if (kSpeedSteps[i] > speed + kSpeedStepTolerance) return kSpeedSteps[i];
-  return speed > kSpeedMax ? kSpeedMax : speed;
+  return speed;
 }
 // Octave jump from the current speed, clamped to the range.
 inline float speedOctave(float speed, bool up) {
   float next = up ? speed * 2 : speed / 2;
-  return next < kSpeedMin ? kSpeedMin : next > kSpeedMax ? kSpeedMax : next;
+  // above the steps' range (a key transposition) an octave up stays put
+  const float top = speed > kSpeedMax ? speed : kSpeedMax;
+  return next < kSpeedMin ? kSpeedMin : next > top ? top : next;
 }
 // What the speed acts on: varispeed (tape: pitch and tempo together), pitch
 // only (the loop keeps its length) or tempo only (stretch: pitch kept).

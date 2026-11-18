@@ -26,6 +26,10 @@ local SPEED_STEPS = {1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2}
 local SPEED_LABELS = {"1/4", "1/2", "2/3", "3/4", "1", "4/3", "3/2", "2"}
 local SPEED_MODES = {"vari", "pitch", "strch"}
 local FILTER_TYPES = {"off", "LP", "HP", "BP"}
+-- What the note keys play (firmware with key_target): resonator, loop (transposed) or both.
+local KEY_TARGETS = {"reson", "loop", "both"}
+-- Gate modes (firmware with gate_modes; older firmware has off/on).
+local GATE_MODES = {"off", "hold", "1shot", "trig"}
 local SIDE_NAMES = {"left", "right"}
 -- One LOOP page per loop (A, then B): its keys and encoders act on that loop.
 local PAGES = {"LOOP A", "LOOP B", "CTRL", "NOTES", "PANEL", "METERS", "SYS"}
@@ -51,6 +55,8 @@ local firmware = ""
 local has_state = false   -- firmware accepts set_param looper_state
 local has_window = false  -- firmware has the playback window (looper_start/end)
 local has_filter = false  -- firmware has the side output filter (filter_*)
+local has_keys = false    -- firmware has key_target (the keys can play the loop)
+local has_gate_modes = false  -- looper_gate 0-3 (off, hold, one-shot, trigger)
 
 -- device model
 local status = nil
@@ -151,11 +157,13 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state, has_window, has_filter = false, false, false
+      has_state, has_window, has_filter, has_keys, has_gate_modes = false, false, false, false, false
       for _, c in ipairs(r.capabilities or {}) do
         if c == "looper_state" then has_state = true end
         if c == "looper_window" then has_window = true end
         if c == "side_filter" then has_filter = true end
+        if c == "key_target" then has_keys = true end
+        if c == "gate_modes" then has_gate_modes = true end
       end
       say("")
       for _, s in ipairs(sides) do s.wave_length = -1 end
@@ -536,12 +544,17 @@ local ROWS = {
    get = function(s) return s.m end,
    show = function(v) return MODES[v + 1] or "?" end,
    step = function(v, d) return util.clamp(v + d, 0, #MODES - 1) end},
+  {label = "keys", name = "key_target", keys = true,
+   get = function(s) return s.kt or 0 end,
+   show = function(v) return KEY_TARGETS[v + 1] or "?" end,
+   step = function(v, d) return util.clamp(v + d, 0, #KEY_TARGETS - 1) end},
   {label = "pan", name = "pan",
    get = function(s) return s.x[4] or 0 end, show = pct,
    step = function(v, d) return util.clamp(math.floor(v * 100 + 0.5 + d) / 100, 0, 1) end},
   {label = "gate", name = "looper_gate",
-   get = function(s) return s.a[11] or 0 end, show = onoff,
-   step = function(v, d) return d > 0 and 1 or 0 end},
+   get = function(s) return s.a[11] or 0 end,
+   show = function(v) return GATE_MODES[v + 1] or "?" end,
+   step = function(v, d) return util.clamp(v + d, 0, has_gate_modes and #GATE_MODES - 1 or 1) end},
   -- playback window edges, shares of the recording; fast turns move further
   {label = "start", name = "looper_start", window = true,
    get = function(s) return s.a[12] or 0 end,
@@ -645,6 +658,10 @@ local function change_row(row, side, d)
     say("flash firmware with the filter", 2)
     return
   end
+  if row.keys and not has_keys then
+    say("flash firmware with key_target", 2)
+    return
+  end
   if row.window and not has_window then
     say("flash firmware with the loop window", 2)
     return
@@ -710,6 +727,8 @@ local OFF_ON = {"off", "on"}
 -- loop_status entry s, the whole status st and the side index i.
 local SIDE_PARAMS = {
   {id = "mode", name = "mode", kind = "option", options = MODES, get = function(s) return s.m end},
+  {id = "key_target", name = "keys play", kind = "option", options = KEY_TARGETS,
+   get = function(s) return s.kt end},
   {id = "volume", name = "volume", kind = "control", spec = function() return unit_spec(0.25) end,
    get = function(s) return s.x[3] end},
   {id = "mix", name = "mix", kind = "control", spec = function() return unit_spec(1) end,
@@ -742,7 +761,8 @@ local SIDE_PARAMS = {
   {id = "looper_end", name = "loop end", kind = "control", spec = function() return unit_spec(1) end,
    get = function(s) return s.a[13] end},
   {id = "looper_post", name = "loop post", kind = "binary", get = function(s) return s.a[10] end},
-  {id = "looper_gate", name = "loop gate", kind = "binary", get = function(s) return s.a[11] end},
+  {id = "looper_gate", name = "loop gate", kind = "option", options = GATE_MODES,
+   get = function(s) return s.a[11] end},
 }
 
 local SHARED_PARAMS = {

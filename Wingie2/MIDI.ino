@@ -62,6 +62,10 @@ void release_note(byte channel, byte pitch) {
 }
 
 void MIDISetPitch(int ch, int mode, int pitch, byte channel) {
+  // The side's panel C in the middle octave (MIDI 48 left, 60 right) plays the loop as recorded.
+  if (play_key_on_loop(ch, wingie_keys::midiSemitones(pitch, BASE_NOTE + (ch ? 12 : 0))))
+    keyLoopKey[ch] = -1;
+  if (!keys_play_resonator(ch)) return;
 
   if (wingie_modes::isPitchedMono(mode)) {
     set_conventional_channel_note(ch, channel, pitch);
@@ -178,6 +182,8 @@ void MIDISetParam(int ch, byte number, byte value) {
   }
 
   if (number == CC_MODE_SELECT) set_mode_from_midi(ch, value);  // values past the last mode are ignored
+
+  if (number == CC_KEY_TARGET) set_key_target(ch, wingie_keys::keyTargetFromCC(value));
 
   if (number == CC_MIX or number == CC_MIX + 32) {
     potValSampled[MIX] = potValRealtime[MIX];

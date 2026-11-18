@@ -44,7 +44,7 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     led_blink_color = ledColor[colors[keyIndex]];
     led_flash_timer = currentMillis;
     Serial.printf("LOOPER_PANEL ch=%u command=%s\n", ch + 1, names[keyIndex]);
-    // C# still plays at once; held, it also toggles gate mode.
+    // C# still plays at once; held, it also steps the gate mode.
     if (keyIndex == 1) {
       looperToggleKey[ch] = keyIndex;
       looperToggleStarted[ch] = currentMillis;
@@ -135,6 +135,8 @@ void playRecordedKey(byte ch, byte keyIndex) {
     noteLoopGate[ch] = true;
     dsp.looperGateNote(ch, wingie_loop::kGateNoteLoop, true);
   }
+  play_panel_key_on_loop(ch, keyIndex);
+  if (!keys_play_resonator(ch)) return;
   if (wingie_modes::isPitchedMono(Mode[ch])) {
     note[ch] = keyIndex;
     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
@@ -261,6 +263,8 @@ void control(void *pvParameters) {
     prefs.putBool("looper_latch", false);
     prefs.putBool("looper_live_input", false);
     prefs.putUInt("mode_cycle", wingie_modes::kDefaultCycleMask);
+    prefs.putUChar("left_keys", wingie_keys::kResonator);
+    prefs.putUChar("right_keys", wingie_keys::kResonator);
     prefs.putFloat("left_pan", wingie_config::kDefaultPan[0]);
     prefs.putFloat("right_pan", wingie_config::kDefaultPan[1]);
     prefs.putBool("unq_caves_store", false);
@@ -307,6 +311,12 @@ void control(void *pvParameters) {
   Serial.printf("looper_live_input = %d\n", looper_live_input);
   mode_cycle = wingie_modes::sanitizeCycle(prefs.getUInt("mode_cycle", wingie_modes::kDefaultCycleMask));
   Serial.printf("mode_cycle = 0x%05lx\n", static_cast<unsigned long>(mode_cycle));
+  for (int ch = 0; ch < 2; ch++) {
+    const int target = prefs.getUChar(ch ? "right_keys" : "left_keys", wingie_keys::kResonator);
+    keyTarget[ch] = target <= wingie_config::kKeyTargetMax ? target : wingie_keys::kResonator;
+  }
+  Serial.printf("key_target = %s / %s\n", wingie_keys::keyTargetName(keyTarget[0]),
+                wingie_keys::keyTargetName(keyTarget[1]));
   float a3_freq_offset = prefs.getFloat("a3_freq_offset", 0);
   a3_freq = 440. + a3_freq_offset;
   dsp.setParamValue("a3_freq", a3_freq);
@@ -678,6 +688,8 @@ void control(void *pvParameters) {
       if (octPrev[ch] != oct[ch]) {
         octPrev[ch] = oct[ch];
         set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
+        // a loop transposed by a key follows the octave switch
+        if (keyLoopKey[ch] >= 0) play_panel_key_on_loop(ch, keyLoopKey[ch]);
         if (Mode[ch] == CAVE_MODE) {
           const int cave = oct[ch] + 1;
           if (!ch) dsp.setParamValue("/Wingie/left/mode_changed", 1);
@@ -833,16 +845,20 @@ void control(void *pvParameters) {
                   dsp.looperGateNote(ch, wingie_loop::kGatePanel, true);
                 }
 
+                // Keys play the loop, the resonator or both (key_target.h).
+                play_panel_key_on_loop(ch, i);
+                const bool resonatorKeys = keys_play_resonator(ch);
+
                 if (firstPress[ch]) {
                   firstPress[ch] = false;
 
-                  if (wingie_modes::isPitchedMono(Mode[ch])) {
+                  if (resonatorKeys && wingie_modes::isPitchedMono(Mode[ch])) {
                     note[ch] = i;
                     tapSequence[ch].reset(uint8_t(i));
                     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
                   }
                 } else {  // Not First Press
-                  if (wingie_modes::isPitchedMono(Mode[ch])) {
+                  if (resonatorKeys && wingie_modes::isPitchedMono(Mode[ch])) {
                     note[ch] = i;
                     tapSequence[ch].append(uint8_t(i));
                     set_channel_note(ch, note[ch] + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
@@ -882,11 +898,11 @@ void control(void *pvParameters) {
                   }
                 }
 
-                if (Mode[ch] == POLY_MODE) {
+                if (resonatorKeys && Mode[ch] == POLY_MODE) {
                   cycle_poly_voice_note(ch, i + BASE_NOTE + oct[ch] * 12 + (ch ? POLY_MODE_NOTE_ADD_R : POLY_MODE_NOTE_ADD_L));
                 }
 
-                if (Mode[ch] == RATIO_MODE) {
+                if (resonatorKeys && Mode[ch] == RATIO_MODE) {
                   cycle_ratio_voice_note(ch, i + BASE_NOTE + oct[ch] * 12 + (ch ? 12 : 0));
                 }
 
@@ -959,7 +975,7 @@ void control(void *pvParameters) {
       applyLooperPanelSpeed(ch, speed, held);
     }
 
-    // C# / G# held half a second: toggle gate mode / loop position. The press
+    // C# / G# held half a second: next gate mode / toggle loop position. The press
     // already played (C#) or stepped the level (G#, restored here).
     for (int ch = 0; ch < 2; ch++) {
       int toggleKey = looperToggleKey[ch];
@@ -974,10 +990,12 @@ void control(void *pvParameters) {
       dsp.looperView(ch, view);
       bool on;
       if (toggleKey == 1) {
-        on = !view.gate;
-        dsp.setLooperGateMode(ch, on);
-        led_blink_color = ledColor[on ? 2 : 0];  // red gate on, white off
-        Serial.printf("LOOPER_PANEL ch=%u gate=%s\n", ch + 1, on ? "on" : "off");
+        // off -> hold -> one-shot -> trigger -> off
+        const int gate = (view.gate + 1) % wingie_loop::kGateModeCount;
+        dsp.setLooperGateMode(ch, gate);
+        static const byte gateColors[wingie_loop::kGateModeCount] = {0, 2, 1, 3};
+        led_blink_color = ledColor[gateColors[gate]];  // white off, red hold, yellow one-shot, purple trigger
+        Serial.printf("LOOPER_PANEL ch=%u gate=%s\n", ch + 1, wingie_loop::gateModeName(gate));
       } else {
         looperLevel[ch] = looperToggleLevel[ch];
         dsp.setLooperControl(ch, 82, looperLevel[ch]);

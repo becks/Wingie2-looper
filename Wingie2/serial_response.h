@@ -51,6 +51,7 @@ struct ChannelSettings {
   float volume;
   float threshold;
   float pan;  // post-resonator pan, 0 hard left .. 1 hard right
+  int keyTarget;  // what the note keys play: 0 resonator, 1 loop, 2 both
 };
 
 // get_settings shared 段参数快照
@@ -123,12 +124,13 @@ struct LoopSideSnapshot {
   float volume;
   float pan;
   bool post;  // loop after the resonator
-  bool gate;  // gate mode: keys and notes play the loop from its start
+  int gate;  // gate mode: 0 off, 1 hold, 2 one-shot, 3 trigger
   float start;  // playback window, shares of the length
   float end;
   int filterType;  // side output filter: 0 off, 1 low, 2 high, 3 band pass
   float filterCutoff;  // Hz
   float filterResonance;  // 0-1
+  int keyTarget;  // what the note keys play: 0 resonator, 1 loop, 2 both
 };
 
 struct LoopStatusSnapshot {
@@ -191,9 +193,9 @@ inline void encodeError(JsonResponse &response, uint32_t id, const char *code,
 
 inline void appendChannelSettings(JsonResponse &response, const ChannelSettings &settings) {
   response.append("{\"mode\":%d,\"mix\":%.4f,\"decay\":%.4f,\"volume\":%.4f,\"threshold\":%.4f,"
-                  "\"pan\":%.4f}",
+                  "\"pan\":%.4f,\"key_target\":%d}",
                   settings.mode, settings.mix, settings.decay, settings.volume, settings.threshold,
-                  settings.pan);
+                  settings.pan, settings.keyTarget);
 }
 
 // 性能参数 limits（单一真值在 config_profiles.h；网页按 name 消费，缺失时回退页面默认）
@@ -202,6 +204,7 @@ inline void appendSettingsLimits(JsonResponse &response) {
       ",\"limits\":{\"mode\":[%g,%g,1],"
       "\"threshold\":[%g,%g,%g],"
       "\"pan\":[%g,%g,%g],"
+      "\"key_target\":[%g,%g,1],"
       "\"a3_hz\":[%g,%g,%g],"
       "\"tuning\":[%g,%g,1],"
       "\"pre_clip_gain\":[%g,%g,%g],"
@@ -217,6 +220,7 @@ inline void appendSettingsLimits(JsonResponse &response) {
       static_cast<float>(wingie_config::kModeMin), static_cast<float>(wingie_config::kModeMax),
       wingie_config::kThresholdMin, wingie_config::kThresholdMax, wingie_config::kThresholdStep,
       wingie_config::kPanMin, wingie_config::kPanMax, wingie_config::kPanStep,
+      static_cast<float>(wingie_config::kKeyTargetMin), static_cast<float>(wingie_config::kKeyTargetMax),
       wingie_config::kA3FrequencyMin, wingie_config::kA3FrequencyMax, wingie_config::kA3FrequencyStep,
       static_cast<float>(wingie_config::kTuningMin), static_cast<float>(wingie_config::kTuningMax),
       wingie_config::kPreClipGainMin, wingie_config::kClipGainMax, wingie_config::kThresholdStep,
@@ -235,7 +239,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));
@@ -352,6 +356,7 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // n: [state, events, length_ms, position_ms, revision]
 // x: [mix, decay, volume] as the DSP currently has them, then the side's pan
 // f: side output filter [type, cutoff Hz, resonance]
+// kt: what the note keys play (0 resonator, 1 loop, 2 both)
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
@@ -365,16 +370,16 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
   for (int ch = 0; ch < 2; ch++) {
     const LoopSideSnapshot &side = snapshot.side[ch];
     response.append("%s{\"a\":[%d,%lu,%lu,%lu,%.3f,%.3f,%d,%.3f,%d,%d,%d,%.4f,%.4f],\"n\":[%d,%u,%lu,%lu,%lu],"
-                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f],\"f\":[%d,%.0f,%.2f]}",
+                    "\"m\":%d,\"o\":%d,\"p\":%d,\"k\":%u,\"x\":[%.3f,%.3f,%.3f,%.3f],\"f\":[%d,%.0f,%.2f],\"kt\":%d}",
                     ch ? "," : "", side.audioState, static_cast<unsigned long>(side.length),
                     static_cast<unsigned long>(side.position), static_cast<unsigned long>(side.capacity),
                     side.speed, side.level, side.reverse ? 1 : 0, side.retention, side.speedMode,
-                    side.post ? 1 : 0, side.gate ? 1 : 0, side.start, side.end, side.notesState,
+                    side.post ? 1 : 0, side.gate, side.start, side.end, side.notesState,
                     static_cast<unsigned>(side.noteCount), static_cast<unsigned long>(side.notesLengthMs),
                     static_cast<unsigned long>(side.notesPositionMs),
                     static_cast<unsigned long>(side.notesRevision), side.mode, side.octave, side.note,
                     static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan,
-                    side.filterType, side.filterCutoff, side.filterResonance);
+                    side.filterType, side.filterCutoff, side.filterResonance, side.keyTarget);
   }
   response.append("],\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
                   snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");

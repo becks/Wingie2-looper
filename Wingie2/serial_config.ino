@@ -321,11 +321,13 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     }
 
     // Looper before (0) or after (1) the resonator, as MIDI CC 88. Runtime only.
-    // Gate mode (1: keys and notes play the loop from its start), as MIDI CC 89.
+    // Gate mode (0 off, 1 hold, 2 one-shot, 3 trigger: keys and notes play the loop
+    // from its start), as MIDI CC 89.
     const bool post = strcmp(request.name, "looper_post") == 0;
     if (post || strcmp(request.name, "looper_gate") == 0) {
       int enabled;
-      if (!quantizeIntegerParameter(request.value, 0, 1, enabled)) return false;
+      if (!quantizeIntegerParameter(request.value, 0, post ? 1 : wingie_loop::kGateModeCount - 1, enabled))
+        return false;
       if (post) dsp.setLooperPost(ch, enabled);
       else dsp.setLooperGateMode(ch, enabled);
       canonical = enabled;
@@ -337,6 +339,17 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
                              wingie_config::kPanStep, canonical))
         return false;
       set_pan(ch, canonical);
+      return true;
+    }
+
+    // What the note keys play: 0 resonator, 1 loop, 2 both. Saved.
+    if (strcmp(request.name, "key_target") == 0) {
+      int target = wingie_config::kKeyTargetMin;
+      if (!quantizeIntegerParameter(request.value, wingie_config::kKeyTargetMin,
+                                    wingie_config::kKeyTargetMax, target))
+        return false;
+      set_key_target(ch, target);
+      canonical = keyTarget[ch];
       return true;
     }
     return false;
@@ -474,6 +487,7 @@ void sendSettings(uint32_t id) {
   left.volume = dsp.getParamValue("volume0");
   left.threshold = left_thresh;
   left.pan = pan[0];
+  left.keyTarget = keyTarget[0];
 
   wingie_serial::ChannelSettings right;
   right.mode = Mode[1];
@@ -482,6 +496,7 @@ void sendSettings(uint32_t id) {
   right.volume = dsp.getParamValue("volume1");
   right.threshold = right_thresh;
   right.pan = pan[1];
+  right.keyTarget = keyTarget[1];
 
   wingie_serial::SharedSettings shared;
   shared.a3Hz = a3_freq;
@@ -641,6 +656,7 @@ void sendLoopStatus(uint32_t id) {
     side.decay = dsp.getParamValue(kDecay[ch]);
     side.volume = dsp.getParamValue(kVolume[ch]);
     side.pan = pan[ch];
+    side.keyTarget = keyTarget[ch];
   }
   wingie_serial::JsonResponse response;
   wingie_serial::encodeLoopStatus(response, id, snapshot);

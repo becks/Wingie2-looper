@@ -67,10 +67,11 @@ class Wingie2
         void setLooperControl(int ch, int cc, int value);
         void setLooperRetention(int ch, float value);
         void setLooperSpeed(int ch, float value);
+        void setLooperKeySpeed(int ch, float value);
         void setLooperSpeedMode(int ch, int mode);
         void setLooperLiveInput(bool on);
         void setLooperPost(int ch, bool on);
-        void setLooperGateMode(int ch, bool on);
+        void setLooperGateMode(int ch, int mode);
         void setLooperWindow(int ch, int edge, float value);
         void setSideFilter(int ch, int type, float cutoff, float resonance);
         void looperGateNote(int ch, uint8_t source, bool on);
