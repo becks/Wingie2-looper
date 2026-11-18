@@ -149,6 +149,10 @@ script's mapping wins there.
   should list `1a86:7523 QinHeng Electronics CH340`. Maiden prints every serial device the
   script sees (`wingie monitor: serial device …`); if the Wingie2 is not accepted, add its
   `vendor`/`model` to `is_bridge` in `lib/core.lua`.
+- **MIDI learn does not react, or a mapped knob does nothing**: norns hears only MIDI devices
+  assigned to a port in SYSTEM → DEVICES → MIDI. Give the controller a port (the same one as
+  when you mapped it: a mapping remembers the port number, not the device), then learn
+  again. A learn that heard nothing is saved as CC 100 on port 1; learn again to replace it.
 - **"no answer: timeout"**: the port opened but the Wingie2 did not answer; reload the script.
   The SYS page shows round trips and timeouts.
 - **norns stuck after SYSTEM → RESTART, when you have used SSH since it booted**: seen once
