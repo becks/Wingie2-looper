@@ -187,6 +187,9 @@ and E3 (`looper_start`/`looper_end`), and the Loop Monitor controls plus loop le
 (`looper_level`), the window and line input mono/stereo on a CTRL page. Opening the port from
 norns does not reset the Wingie2, so loops recorded before connecting are kept. The same
 folder is also a norns mod, with the same pages in the system menu next to any other script.
+Its controls are also norns params (PARAMS → WINGIE2), so a MIDI controller plugged into
+norns can drive them with norns' MIDI learn; with the mod, the mappings follow from script
+to script.
 
 ## CPU headroom
 
