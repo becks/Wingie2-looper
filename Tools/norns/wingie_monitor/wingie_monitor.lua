@@ -11,6 +11,8 @@
 -- page METERS: input and output levels (read only)
 -- page SYS:    K3 reload waveforms and clear max RTT
 --
+-- PARAMS > WINGIE2: the controls as params, to map to MIDI (PARAMS > MAP).
+--
 -- The same pages are in the system menu with the mod enabled (SYSTEM > MODS),
 -- next to any other script. All the code is in lib/core.lua.
 
@@ -24,7 +26,10 @@ if not mods.is_loaded("wingie_monitor") then
 end
 local core = require(CORE)
 
-function init() core.start("script", function() redraw() end) end
+function init()
+  core.add_params()
+  core.start("script", function() redraw() end)
+end
 function cleanup() core.stop("script") end
 function enc(n, d) core.enc(n, d) end
 function key(n, z) core.key(n, z) end

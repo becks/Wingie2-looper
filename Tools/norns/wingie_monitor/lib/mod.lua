@@ -14,6 +14,9 @@ core.register()
 -- Loading a script frees all metros (see core).
 mod.hook.register("script_post_cleanup", "wingie_monitor", core.script_cleared)
 mod.hook.register("script_pre_init", "wingie_monitor", core.script_starting)
+-- The WINGIE2 params (MIDI-mappable) next to every script's own; after its init,
+-- since loading a script clears all params.
+mod.hook.register("script_post_init", "wingie_monitor", core.add_params)
 
 local m = {}
 

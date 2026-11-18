@@ -103,6 +103,45 @@ straight away and the polled state takes over after 0.6 s.
 
 Reverse and cross-feedback have no serial command: use the panel or MIDI CC 85 and 84.
 
+## MIDI controller (PARAMS)
+
+Every control is also a norns param, in the **WINGIE2** group of the PARAMS menu, so a MIDI
+controller plugged into norns can drive the Wingie2 with norns' own MIDI learn. With the mod
+the group is there next to any script's own params; with the script, in its PARAMS menu.
+
+| Params | Per side (A and B) | Shared |
+|---|---|---|
+| Sound | mode, volume, mix, decay, threshold, pan, filter, cutoff, resonance | pre clip gain, post clip gain, line in mono |
+| Looper | speed, speed mode, sos, loop level, loop start, loop end, loop post, loop gate | live input, latch |
+| Buttons | rec / dub, stop / play, clear | |
+
+To map one, as for any norns param: K1 → PARAMS → MAP, open WINGIE2 and scroll to the param,
+K3 opens its mapping; on LEARN press K3, move the knob or press the button on the controller,
+then K2 to go back (the mapping is saved). The same page sets the range, accumulation and
+echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
+
+- **mode**, **speed**, **filter** and the other lists step through their choices along the
+  knob's travel; **loop post**, **loop gate**, **live input**, **latch** and **line in mono**
+  are toggles (a button press switches them).
+- **rec / dub**, **stop / play** and **clear** are buttons, as K2 and K3 on the LOOP pages:
+  rec / dub records, then closes the loop and plays, then switches play ↔ overdub;
+  stop / play stops or plays (a recording closes and plays). **clear** empties the loop at
+  once (on the panel it takes a 1 s hold of E), so map it to a button you will not hit by
+  mistake.
+- **volume**, **mix** and **decay** move the side's value as the panel knob does; moving the
+  panel knob takes over again.
+
+The params follow the Wingie2: values played on the panel or from the pages show up in the
+params when the pages poll (while one is open). A param sends only when its value changes,
+so a script's `params:bang()` does not resend old values. They are not stored in the
+script's PSETs, since the Wingie2 keeps its own state. The params work with no page open,
+but the transport buttons then read the loop state first, so they answer a little later.
+
+With the mod, norns keeps one map per script; the mod also saves the WINGIE2 mappings in
+`~/dust/data/wingie_monitor/params.pmap` and restores them in every script, so a controller
+mapped once works whichever script is running. If a script maps the same CC itself, the
+script's mapping wins there.
+
 ## Troubleshooting
 
 - **"waiting for Wingie2…"**: check the cable (data, not charge-only). Over SSH, `lsusb`
