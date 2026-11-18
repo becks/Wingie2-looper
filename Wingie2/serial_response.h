@@ -239,7 +239,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\",\"looper_reverse\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));

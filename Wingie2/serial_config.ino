@@ -320,6 +320,15 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       return true;
     }
 
+    // Reverse playback (1), as MIDI CC 85 and the panel's B. Runtime only.
+    if (strcmp(request.name, "looper_reverse") == 0) {
+      int reverse;
+      if (!quantizeIntegerParameter(request.value, 0, 1, reverse)) return false;
+      dsp.setLooperControl(ch, 85, reverse ? 127 : 0);
+      canonical = reverse;
+      return true;
+    }
+
     // Looper before (0) or after (1) the resonator, as MIDI CC 88. Runtime only.
     // Gate mode (0 off, 1 hold, 2 one-shot, 3 trigger: keys and notes play the loop
     // from its start), as MIDI CC 89.

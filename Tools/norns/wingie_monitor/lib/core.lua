@@ -57,6 +57,7 @@ local has_window = false  -- firmware has the playback window (looper_start/end)
 local has_filter = false  -- firmware has the side output filter (filter_*)
 local has_keys = false    -- firmware has key_target (the keys can play the loop)
 local has_gate_modes = false  -- looper_gate 0-3 (off, hold, one-shot, trigger)
+local has_reverse = false     -- set_param looper_reverse
 
 -- device model
 local status = nil
@@ -157,13 +158,15 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state, has_window, has_filter, has_keys, has_gate_modes = false, false, false, false, false
+      has_state, has_window, has_filter, has_keys, has_gate_modes, has_reverse =
+        false, false, false, false, false, false
       for _, c in ipairs(r.capabilities or {}) do
         if c == "looper_state" then has_state = true end
         if c == "looper_window" then has_window = true end
         if c == "side_filter" then has_filter = true end
         if c == "key_target" then has_keys = true end
         if c == "gate_modes" then has_gate_modes = true end
+        if c == "looper_reverse" then has_reverse = true end
       end
       say("")
       for _, s in ipairs(sides) do s.wave_length = -1 end
@@ -576,6 +579,9 @@ local ROWS = {
   {label = "reso", name = "filter_resonance", filter = true,
    get = function(s) return s.f and s.f[3] or 0 end, show = pct,
    step = function(v, d) return util.clamp(math.floor(v * 100 + 0.5 + d) / 100, 0, 1) end},
+  {label = "reverse", name = "looper_reverse", reverse = true,
+   get = function(s) return s.a[7] or 0 end, show = onoff,
+   step = function(v, d) return d > 0 and 1 or 0 end},
   {label = "position", name = "looper_post",
    get = function(s) return s.a[10] or 0 end,
    show = function(v) return v == 1 and "post" or "pre" end,
@@ -656,6 +662,10 @@ end
 local function change_row(row, side, d)
   if row.filter and not has_filter then
     say("flash firmware with the filter", 2)
+    return
+  end
+  if row.reverse and not has_reverse then
+    say("flash firmware with looper_reverse", 2)
     return
   end
   if row.keys and not has_keys then
@@ -760,6 +770,7 @@ local SIDE_PARAMS = {
    get = function(s) return s.a[12] end},
   {id = "looper_end", name = "loop end", kind = "control", spec = function() return unit_spec(1) end,
    get = function(s) return s.a[13] end},
+  {id = "looper_reverse", name = "loop reverse", kind = "binary", get = function(s) return s.a[7] end},
   {id = "looper_post", name = "loop post", kind = "binary", get = function(s) return s.a[10] end},
   {id = "looper_gate", name = "loop gate", kind = "option", options = GATE_MODES,
    get = function(s) return s.a[11] end},

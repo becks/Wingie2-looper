@@ -107,12 +107,15 @@ void looperPanelCommand(byte ch, byte keyIndex) {
     Serial.printf("NOTE_LOOPER ch=%u command=%s events=%u length_ms=%lu\n", ch + 1, name,
                   loop.count(), (unsigned long)loop.lengthMs());
   } else if (keyIndex == 11) {  // B
-    looperReverse[ch] = !looperReverse[ch];
-    dsp.setLooperControl(ch, 85, looperReverse[ch] ? 127 : 0);
+    // From the engine's state: MIDI CC 85 and serial set it too.
+    wingie_loop::LoopView view;
+    dsp.looperView(ch, view);
+    const bool reverse = !view.reverse;
+    dsp.setLooperControl(ch, 85, reverse ? 127 : 0);
     led_blink = 3;
-    led_blink_color = ledColor[looperReverse[ch] ? 3 : 0];
+    led_blink_color = ledColor[reverse ? 3 : 0];
     led_flash_timer = currentMillis;
-    Serial.printf("LOOPER_PANEL ch=%u reverse=%s\n", ch + 1, looperReverse[ch] ? "on" : "off");
+    Serial.printf("LOOPER_PANEL ch=%u reverse=%s\n", ch + 1, reverse ? "on" : "off");
   }
 }
 
