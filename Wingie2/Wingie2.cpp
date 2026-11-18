@@ -14387,6 +14387,10 @@ void Wingie2::setLooperSpeed(int ch, float value) {
     static_cast<LooperDSP*>(fDSP)->setSpeed(ch, value);
 }
 
+void Wingie2::setLooperKeySpeed(int ch, float value) {
+    static_cast<LooperDSP*>(fDSP)->setKeySpeed(ch, value);
+}
+
 void Wingie2::setLooperSpeedMode(int ch, int mode) {
     static_cast<LooperDSP*>(fDSP)->setSpeedMode(ch, mode);
 }
@@ -14399,8 +14403,8 @@ void Wingie2::setLooperPost(int ch, bool on) {
     static_cast<LooperDSP*>(fDSP)->setPost(ch, on);
 }
 
-void Wingie2::setLooperGateMode(int ch, bool on) {
-    static_cast<LooperDSP*>(fDSP)->setGateMode(ch, on);
+void Wingie2::setLooperGateMode(int ch, int mode) {
+    static_cast<LooperDSP*>(fDSP)->setGateMode(ch, mode);
 }
 
 void Wingie2::setLooperWindow(int ch, int edge, float value) {

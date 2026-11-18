@@ -20,8 +20,8 @@
 
   const settings = {
     source: "startup",
-    left: {mode: 4, mix: 0.25, decay: 4.5, volume: 0.5, threshold: 0.165, pan: 0},
-    right: {mode: 3, mix: 0.75, decay: 5.5, volume: 0.6, threshold: 0.2475, pan: 1},
+    left: {mode: 4, mix: 0.25, decay: 4.5, volume: 0.5, threshold: 0.165, pan: 0, key_target: 0},
+    right: {mode: 3, mix: 0.75, decay: 5.5, volume: 0.6, threshold: 0.2475, pan: 1, key_target: 0},
     shared: {
       a3_hz: 440,
       tuning: -1,
@@ -74,12 +74,12 @@
     left: {
       mode: [0, 18, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
       volume: [0, 1, 0.001, false], threshold: [0.0825, 0.99, 0.0825, true],
-      pan: [0, 1, 0.01, true]
+      pan: [0, 1, 0.01, true], key_target: [0, 2, 1, true]
     },
     right: {
       mode: [0, 18, 1, true], mix: [0, 1, 0.001, false], decay: [0.1, 10, 0.01, false],
       volume: [0, 1, 0.001, false], threshold: [0.0825, 0.99, 0.0825, true],
-      pan: [0, 1, 0.01, true]
+      pan: [0, 1, 0.01, true], key_target: [0, 2, 1, true]
     },
     shared: {
       a3_hz: [358.08, 521.91, 0.01, true], tuning: [-1, 7, 1, true],
@@ -97,12 +97,12 @@
     return parameterRanges[target] && parameterRanges[target][name];
   }
 
-  // 与固件 encodeSettings 的 limits 段逐项一致：shared 全部参数 + left/right 的 mode/threshold/pan
+  // 与固件 encodeSettings 的 limits 段逐项一致：shared 全部参数 + left/right 的 mode/threshold/pan/key_target
   function buildLimits() {
     const limits = {};
     for (const [name, spec] of Object.entries(parameterRanges.shared)) limits[name] = [spec[0], spec[1], spec[2]];
     for (const [name, spec] of Object.entries(parameterRanges.left)) {
-      if (name === "mode" || name === "threshold" || name === "pan") limits[name] = [spec[0], spec[1], spec[2]];
+      if (name === "mode" || name === "threshold" || name === "pan" || name === "key_target") limits[name] = [spec[0], spec[1], spec[2]];
     }
     return limits;
   }

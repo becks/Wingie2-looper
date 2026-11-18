@@ -31,7 +31,8 @@ mode: varispeed (tape: pitch and duration together), pitch (the speed shifts pit
 loop keeps its length) and stretch (the speed changes tempo, the pitch is kept); the LED
 blinks seven times, white, purple or yellow. G# lowers and A#/B♭ raises that side's
 loop level in approximately 6% steps. B toggles reverse playback. Holding C# for half a
-second toggles gate mode (the press still starts playback; six blinks, red on, white off);
+second steps the gate mode off → hold → one-shot → trigger (the press still starts
+playback; six blinks: white, red, yellow, purple);
 holding G# for half a second moves the loop before or after the resonator (the level step of
 the press is undone; six blinks, yellow before, purple after). See the README for both.
 
@@ -52,6 +53,22 @@ records nor replays keys (its keys edit resonator mutes). Only panel keys are re
 not incoming MIDI notes, and sequences are lost at power-off. The note and audio loopers
 run independently and are not synchronized.
 
+### Keys play the loop
+
+A per-side setting chooses what the note keys and MIDI notes play: the resonator (default,
+as above), the audio loop, or both (`set_param` `key_target` 0–2, CC 95, the configuration
+page's Keys Play, the Loop Monitor or norns; saved with the other settings). With the loop,
+a key sets the loop speed to 2^(semitones/12): the panel's C with the octave switch in the
+middle is the recording's own pitch, so the panel spans −12 to +23 semitones (0.5–3.8×);
+MIDI notes count from the side's panel C (MIDI 48 left, 60 right) and clamp to 0.25–4×. Key
+transpositions are the only way past 2×: CC 81, the steps and the panel jumps stay within
+0.25–2×, and a step up from above 2× stays put. The speed mode applies as usual (varispeed,
+pitch with the two grain heads, or stretch). The octave switch re-applies the last panel key,
+and replayed note loops transpose the loop like live keys. With Loop the keys leave the
+resonator and its tap sequence alone; with Both they do both. Cave keys keep editing mutes,
+and MPE zone notes stay on the resonator. `loop_status` reports the setting as `kt`;
+`hello` advertises `key_target`.
+
 | CC | Function | Value |
 |---|---|---|
 | 80 | State | 0 bypass/stop; 1 new recording; 2 playback; 3 overdub; 4 clear |
@@ -63,12 +80,13 @@ run independently and are not synchronized.
 | 86 | Speed step | 0–127 in eight bands of 16: 1/4, 1/2, 2/3, 3/4, 1 (64), 4/3, 3/2, 2 |
 | 87 | Speed mode | 0–42 varispeed; 43–85 pitch (length kept); 86–127 stretch (pitch kept) |
 | 88 | Loop position | 0–63 before the resonator; 64–127 after it |
-| 89 | Gate mode | 0–63 off; 64–127 on (held keys and notes play the loop from its start) |
+| 89 | Gate mode | 0–31 off; 32–63 hold; 64–95 one-shot; 96–127 trigger (keys and notes play the loop from its start; before v4.30-duallooper.14: 0–63 off, 64–127 on) |
 | 90 | Playback window start | 0–127 = 0–100% of the recording |
 | 91 | Playback window end | 0–127 = 0–100% of the recording |
 | 92 | Side filter type | 0–31 off; 32–63 low pass; 64–95 high pass; 96–127 band pass |
 | 93 | Side filter cutoff | 0–127 = 20 Hz–16 kHz, exponential |
 | 94 | Side filter resonance | 0–127 = 0–100% |
+| 95 | What the note keys play | 0–42 resonator; 43–85 loop (transposed); 86–127 both; saved |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -111,12 +129,16 @@ is mixed in at the same -6 dB without being recorded, on both sides. After the r
 (`looper_post`, per side, 0/1, CC 88 or Loop Monitor; runtime only) the input is that side's
 output channel and always passes at unity, in every state.
 
-In gate mode (`looper_gate`, per side, 0/1, CC 89 or Loop Monitor; runtime only) playback is
-multiplied by a gate that opens while panel keys (not in Cave mode), MIDI notes on the side's
-channel (or the Both channel) or the note looper's replay hold it, ramping in ~1 ms. Each new
-key or note asks for a restart: the gate fades to silence (~2 ms), the play position jumps to
-the loop start (the end in reverse) and the grain heads are re-placed. Only playback is gated;
-overdub stays audible. Notes taken by MPE do not gate the loop.
+In gate mode (`looper_gate`, per side, 0 off, 1 hold, 2 one-shot, 3 trigger, CC 89, the
+Loop Monitor or norns; runtime only) playback is multiplied by a gate, ramping in ~1 ms. Each
+new panel key (not in Cave mode), MIDI note on the side's channel (or the Both channel) or
+note looper replay asks for a restart: the gate fades to silence (~2 ms), the play position
+jumps to the loop start (the end in reverse) and the grain heads are re-placed. In hold the
+gate stays open while a key, note or replay holds it. In one-shot it also closes when playback
+wraps, so the loop (or its window) plays once; in trigger only the wrap closes it, whatever
+the release. Entering one-shot or trigger waits for a key. Only playback is gated; overdub
+stays audible. Notes taken by MPE do not gate the loop. `hello` advertises `gate_modes`;
+older firmware takes `looper_gate` 0/1 only.
 
 The playback window (`looper_start` and `looper_end`, per side, 0–1 of the recording in
 1/10000 steps, CC 90 and 91 in 1/127 steps, Loop Monitor or norns; runtime only) chooses the
@@ -154,7 +176,8 @@ keys and controls, the looper latch (`latch` 0–2 in `loop_status`: off, on, on
 without the `resonator_modes` capability in `hello`), Pan and
 SOS sliders, speed mode buttons (`set_param` `speed_mode`, 0–2) and speed step buttons
 (`set_param` `speed_step`, 0–7), After resonator and Gate toggles (`set_param`
-`looper_post` and `looper_gate`, 0/1; `loop_status` `a[9]` and `a[10]`; hidden without the
+`looper_post` 0/1 and `looper_gate` 0–3, the Gate button stepping through the modes with
+`gate_modes`; `loop_status` `a[9]` and `a[10]`; hidden without the
 `looper_routing` capability), and the Looper latch and Live input in playback checkboxes
 (shared `looper_latch` and `looper_live_input`), written with `set_param`. Open it from disk in desktop Chrome or Edge.
 Pan and SOS require v4.30-duallooper.6 or later and the speed steps v4.30-duallooper.7 or

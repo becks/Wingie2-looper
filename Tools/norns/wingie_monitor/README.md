@@ -91,7 +91,9 @@ E1 changes page.
 
 K2 on a stopped loop starts a **new** recording (the old loop is replaced), as MIDI CC 80 = 1.
 
-CTRL rows: speed (step), speed mode, SOS, loop level, mode, pan, gate, start and end of the
+CTRL rows: speed (step), speed mode, SOS, loop level, mode, keys (what the note keys play:
+resonator, loop or both; needs v4.30-duallooper.14), pan, gate (off, hold, one-shot,
+trigger; off/hold only before v4.30-duallooper.14), start and end of the
 playback window (in seconds into the recording; 1/1000 of it per step, more when turned fast;
 the edges never cross), the side filter (type off/LP/HP/BP, cutoff in Hz, a semitone per
 step, and resonance; needs v4.30-duallooper.13), position (pre/post the resonator), and the shared live input, looper
@@ -111,7 +113,7 @@ the group is there next to any script's own params; with the script, in its PARA
 
 | Params | Per side (A and B) | Shared |
 |---|---|---|
-| Sound | mode, volume, mix, decay, threshold, pan, filter, cutoff, resonance | pre clip gain, post clip gain, line in mono |
+| Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance | pre clip gain, post clip gain, line in mono |
 | Looper | speed, speed mode, sos, loop level, loop start, loop end, loop post, loop gate | live input, latch |
 | Buttons | rec / dub, stop / play, clear | |
 
@@ -121,9 +123,9 @@ then K2 to go back. K2 is what saves the mapping (to the script's `.pmap` file a
 the mod, to the mod's own file): leaving with K1 keeps it only until another script loads.
 The same page sets the range, accumulation and echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
 
-- **mode**, **speed**, **filter** and the other lists step through their choices along the
-  knob's travel; **loop post**, **loop gate**, **live input**, **latch** and **line in mono**
-  are toggles (a button press switches them).
+- **mode**, **keys play**, **speed**, **filter**, **loop gate** (off, hold, one-shot, trigger)
+  and the other lists step through their choices along the knob's travel; **loop post**,
+  **live input**, **latch** and **line in mono** are toggles (a button press switches them).
 - **rec / dub**, **stop / play** and **clear** are buttons, as K2 and K3 on the LOOP pages:
   rec / dub records, then closes the loop and plays, then switches play ↔ overdub;
   stop / play stops or plays (a recording closes and plays). **clear** empties the loop at

@@ -269,7 +269,7 @@
       <p>Hold both Mode buttons, then press a key on the side whose looper you want to control.</p>
       <div class="combo-grid">
         <div class="combo"><kbd>C</kbd><span>Audio: record</span></div>
-        <div class="combo"><kbd>C#</kbd><span>Audio: play; hold ½ s: gate mode on/off (keys and notes play the loop from its start)</span></div>
+        <div class="combo"><kbd>C#</kbd><span>Audio: play; hold ½ s: next gate mode, off → hold → one-shot → trigger (keys and notes play the loop from its start)</span></div>
         <div class="combo"><kbd>D</kbd><span>Audio: overdub</span></div>
         <div class="combo"><kbd>D#</kbd><span>Audio: bypass (keeps the loop)</span></div>
         <div class="combo"><kbd>Hold E</kbd><span>Audio: clear the loop (1 s)</span></div>
@@ -307,6 +307,7 @@
       <div class="side-head">
         <h2 data-name></h2>
         <label class="meta" data-mode-wrap>Mode <i class="mode-led" data-mode-led aria-hidden="true"></i><select class="mode-select" data-mode aria-label="Resonator mode" disabled></select></label>
+        <label class="meta" data-key-target-wrap hidden title="What the note keys and MIDI notes play: the resonator (as always), the audio loop (transposed: C in the middle octave plays it as recorded; the speed mode decides tape-style or pitch only) or both. MIDI CC 95. Saved like the other settings.">Keys <select class="mode-select" data-key-target aria-label="What the keys play"><option value="0">Resonator</option><option value="1">Loop</option><option value="2">Both</option></select></label>
         <span class="meta">Octave <b data-octave>–</b></span>
         <span class="meta">Note <b data-note>–</b></span>
         <label class="meta control" data-pan-wrap hidden title="Stereo pan after the resonator. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s.">Pan <input type="range" min="0" max="1" step="0.01" data-pan aria-label="Pan"> <b data-pan-value>–</b></label>
@@ -431,8 +432,10 @@
       {key: "post", name: "looper_post", label: "After resonator",
        title: "Record and play the resonator output instead of feeding the loop into the resonator (MIDI CC 88; panel: hold both Mode buttons and G#). Back to before at power-on."},
       {key: "gate", name: "looper_gate", label: "Gate",
-       title: "Playback is heard only while a key or MIDI note is held, and each one restarts the loop (MIDI CC 89; panel: hold both Mode buttons and C#). Off at power-on."},
+       title: "Keys and MIDI notes play the loop from its start (MIDI CC 89; panel: hold both Mode buttons and C# for ½ s). Off at power-on. With firmware that has gate modes, a click steps off → hold (loops while held) → one-shot (plays once, stops on release) → trigger (plays once to the end)."},
     ];
+    // Gate modes (firmware with gate_modes); older firmware has only off/on.
+    const GATE_MODES = ["off", "hold", "one-shot", "trigger"];
     // Panel ranges as the firmware applies them (decay in the DSP's units).
     const SLIDERS = [
       {key: "mix", min: 0, max: 1, format: (v) => Math.round(v * 100) + "%"},
@@ -481,6 +484,8 @@
       window: {start: 0, end: 1, holdUntil: 0, drag: null},
       modeHoldUntil: 0,
       modeBusy: false,
+      keyTargetHoldUntil: 0,
+      keyTargetBusy: false,
       ui: null,
     }));
     let fps = 4900;
@@ -499,6 +504,7 @@
     let routingSupported = false;
     let levelSupported = false;  // set_param looper_level
     let windowSupported = false;
+    let gateModesSupported = false;  // looper_gate 0-3 (off, hold, one-shot, trigger)
     let pollTimer = null;
     let statusBusy = false;
 
@@ -543,6 +549,7 @@
         ui.mode.appendChild(option);
       });
       ui.mode.addEventListener("change", () => sendMode(side, Number(ui.mode.value)));
+      ui.keyTarget.addEventListener("change", () => sendKeyTarget(side, Number(ui.keyTarget.value)));
       ui.looper_level = ui.loopLevel;
       ui.looper_levelWrap = ui.loopLevelWrap;
       ui.looper_levelValue = ui.loopLevelValue;
@@ -568,7 +575,13 @@
         button.textContent = toggle.label;
         button.title = toggle.title;
         button.setAttribute("aria-pressed", "false");
-        button.addEventListener("click", () => sendRouting(side, toggle, button.getAttribute("aria-pressed") !== "true"));
+        button.addEventListener("click", () => {
+          if (toggle.key === "gate" && gateModesSupported && side.status) {
+            sendRouting(side, toggle, (side.status.audio.gate + 1) % GATE_MODES.length);
+          } else {
+            sendRouting(side, toggle, button.getAttribute("aria-pressed") !== "true" ? 1 : 0);
+          }
+        });
         ui.routing.appendChild(button);
         return button;
       });
@@ -697,10 +710,10 @@
       }
     }
 
-    async function sendRouting(side, toggle, on) {
+    async function sendRouting(side, toggle, value) {
       if (!transport.connected) return;
       try {
-        await request("set_param", {target: side.name, name: toggle.name, value: on ? 1 : 0});
+        await request("set_param", {target: side.name, name: toggle.name, value});
       } catch (error) {
         setMessage(toggle.label + " not applied: " + error.message, true);
       }
@@ -739,6 +752,20 @@
       } finally {
         side.modeBusy = false;
         side.modeHoldUntil = performance.now() + CONTROL_HOLD_MS;
+      }
+    }
+
+    // What the side's note keys play (set_param key_target): resonator, loop or both.
+    async function sendKeyTarget(side, target) {
+      if (!transport.connected) return;
+      side.keyTargetBusy = true;
+      try {
+        await request("set_param", {target: side.name, name: "key_target", value: target});
+      } catch (error) {
+        setMessage("Keys not applied: " + error.message, true);
+      } finally {
+        side.keyTargetBusy = false;
+        side.keyTargetHoldUntil = performance.now() + CONTROL_HOLD_MS;
       }
     }
 
@@ -939,6 +966,7 @@
         routingSupported = (hello.capabilities || []).includes("looper_routing");
         levelSupported = (hello.capabilities || []).includes("looper_level");
         windowSupported = (hello.capabilities || []).includes("looper_window");
+        gateModesSupported = (hello.capabilities || []).includes("gate_modes");
         try {
           await request("loop_status");
         } catch (error) {
@@ -1026,10 +1054,10 @@
           side.status = {
             audio: {state: raw.a[0], length: raw.a[1], position: raw.a[2], capacity: raw.a[3],
                     speed: raw.a[4], level: raw.a[5], reverse: !!raw.a[6], sos: raw.a[7], mode: raw.a[8] || 0,
-                    post: !!raw.a[9], gate: !!raw.a[10],
+                    post: !!raw.a[9], gate: raw.a[10] || 0,
                     start: raw.a.length > 12 ? raw.a[11] : 0, end: raw.a.length > 12 ? raw.a[12] : 1},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
-            mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [],
+            mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [], keyTarget: raw.kt,
             filter: raw.f ? {type: raw.f[0], cutoff: raw.f[1], resonance: raw.f[2]} : null,
           };
           side.statusAt = now;
@@ -1246,6 +1274,17 @@
           }
         }
         ui.mode.classList.toggle("changed", Number(ui.mode.dataset.changedUntil || 0) > now);
+        // Keys: shown with firmware that reports it (kt in loop_status).
+        ui.keyTargetWrap.hidden = status.keyTarget === undefined;
+        if (status.keyTarget !== undefined) {
+          ui.keyTarget.disabled = !transport.connected;
+          if (!side.keyTargetBusy && now > side.keyTargetHoldUntil && ui.keyTarget.value !== String(status.keyTarget)) {
+            if (ui.keyTarget.dataset.filled) ui.keyTarget.dataset.changedUntil = now + CHANGED_MS;
+            ui.keyTarget.value = String(status.keyTarget);
+            ui.keyTarget.dataset.filled = "1";
+          }
+          ui.keyTarget.classList.toggle("changed", Number(ui.keyTarget.dataset.changedUntil || 0) > now);
+        }
         const led = MODE_LEDS[status.mode] || (status.mode > 4 ? "w" : "");
         if (ui.modeLed.dataset.led !== led) {
           ui.modeLed.dataset.led = led;
@@ -1274,7 +1313,13 @@
         });
         ui.stepButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(index === stepIndex)));
         ui.routing.hidden = !routingSupported;
-        ui.routingButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(audio[ROUTING[index].key])));
+        ui.routingButtons.forEach((button, index) => {
+          const toggle = ROUTING[index];
+          button.setAttribute("aria-pressed", String(Boolean(audio[toggle.key])));
+          if (toggle.key === "gate") {
+            button.textContent = gateModesSupported ? "Gate " + (GATE_MODES[audio.gate] || "?") : toggle.label;
+          }
+        });
         setValue(ui.level, Math.round(audio.level * 100) + "%", now);
         // Older firmware cannot set the loop level: the value stays read-only.
         ui.levelText.hidden = levelSupported;

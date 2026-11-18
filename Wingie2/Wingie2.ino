@@ -34,6 +34,7 @@
 #include "note_looper.h"
 #include "resonator_modes.h"
 #include "speed_steps.h"
+#include "key_target.h"
 #include "side_filter.h"
 #include "serial_config_protocol.h"
 #include "tap_sequence.h"
@@ -76,6 +77,7 @@
 #define CC_DECAY 1
 #define CC_VOL 7
 #define CC_PAN 10
+#define CC_KEY_TARGET 95  // 0-42 resonator, 43-85 loop, 86-127 both
 #define CC_TUNING 23
 
 #define CC_MIDI_CH_L 20
@@ -174,6 +176,10 @@ bool sourceChanged = false, sourceChanged2 = false;
 int note[2], currentNote[2] = {36, 36}, octPrev[2], oct[2], allKeys[2] = {0, 0}, currentPoly[2] = {0, 0};
 // Mode 由 control 任务（模式键递增）与 loop 任务（MIDI CC / 网页 set_param）共同读写
 volatile int Mode[2] = {POLY_MODE, POLY_MODE};
+// What the note keys and MIDI notes play on each side (key_target.h), saved.
+volatile int keyTarget[2] = {wingie_keys::kResonator, wingie_keys::kResonator};
+// The last panel key that transposed the loop, re-applied when the octave moves (-1 none).
+int keyLoopKey[2] = {-1, -1};
 bool modeButtonState[2], modeButtonPressed[2], duck_env_triggered[2] = {false, false};
 bool looperPanelGesture = false, looperClearArmed[2] = {false, false};
 // Looper latch (boot B+B or the config page): tapping both Mode buttons locks the
@@ -505,6 +511,33 @@ void set_pan(byte ch, float value) {
   pan[ch] = value;
   dsp.setParamValue(ch ? "pan1" : "pan0", value);
   dirty[kDirtyLeftPan + ch] = true;
+}
+
+// What the note keys play: from the config page, MIDI CC 95 or norns; saved.
+void set_key_target(byte ch, int target) {
+  if (target < wingie_config::kKeyTargetMin || target > wingie_config::kKeyTargetMax) return;
+  if (keyTarget[ch] == target) return;
+  keyTarget[ch] = target;
+  keyLoopKey[ch] = -1;
+  dirty[kDirtyLeftKeyTarget + ch] = true;
+  Serial.printf("KEYS ch=%u target=%s\n", ch + 1, wingie_keys::keyTargetName(target));
+}
+
+// A note key or MIDI note on a side whose keys play the loop: transposes it,
+// semitones from the side's reference (key_target.h). Cave keys edit mutes instead.
+bool play_key_on_loop(byte ch, int semitones) {
+  if (Mode[ch] == CAVE_MODE || !wingie_keys::playsLoop(keyTarget[ch])) return false;
+  dsp.setLooperKeySpeed(ch, wingie_keys::loopSpeedForSemitones(semitones));
+  return true;
+}
+
+void play_panel_key_on_loop(byte ch, int key) {
+  if (play_key_on_loop(ch, wingie_keys::panelSemitones(key, oct[ch]))) keyLoopKey[ch] = key;
+}
+
+// Whether the keys still play the resonator (always in Cave, where they edit mutes).
+bool keys_play_resonator(byte ch) {
+  return Mode[ch] == CAVE_MODE || wingie_keys::playsResonator(keyTarget[ch]);
 }
 
 // Writes one bool setting at once (boot key combos), leaving it dirty on failure.

@@ -35,6 +35,8 @@ static const GeneralSettingEntry kGeneralSettings[kDirtyCount] = {
   {"looper_latch", kSettingBool, kDirtyLooperLatch, "%s is saved, value is %d.\n", &looper_latch},
   {"looper_live_input", kSettingBool, kDirtyLooperLiveInput, "%s is saved, value is %d.\n", &looper_live_input},
   {"mode_cycle", kSettingUInt, kDirtyModeCycle, "%s is saved, value is 0x%05lx.\n", &mode_cycle},
+  {"left_keys", kSettingUChar, kDirtyLeftKeyTarget, "%s is saved, value is %d.\n", &keyTarget[0]},
+  {"right_keys", kSettingUChar, kDirtyRightKeyTarget, "%s is saved, value is %d.\n", &keyTarget[1]},
 };
 
 bool save_general_preferences(Preferences &store) {

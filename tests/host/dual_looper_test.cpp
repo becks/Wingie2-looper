@@ -265,6 +265,68 @@ int main() {
     assert(g.state() == 2);
   }
 
+  // One-shot and trigger: a trigger plays the loop once from its start, then the
+  // gate stays closed until the next trigger. One-shot also stops on release.
+  {
+    using wingie_loop::kGateOneShot;
+    using wingie_loop::kGateTrigger;
+    std::vector<uint8_t> buf(400);
+    wingie_loop::Loop g;
+    g.attach(buf.data(), buf.size());
+    g.command(1);
+    for (int i = 0; i < 400 * 9; ++i) g.process(i < 200 * 9 ? 0.5f : -0.5f, 1, 1, 1, 0);
+    assert(g.state() == 2 && g.length() == 400);
+    auto run = [&](int samples, float& peak) {
+      float last = 0;
+      peak = 0;
+      for (int i = 0; i < samples; ++i) { last = g.process(0, 1, 1, 1, 0); peak = std::max(peak, std::abs(last)); }
+      return last;
+    };
+    float peak;
+    // Trigger: silent until a key, then one pass whatever the release.
+    g.setGate(kGateTrigger, false);
+    run(400, peak);  // the playing loop fades out
+    run(400 * 9, peak);
+    assert(peak < .001f);
+    g.retrigger();
+    float last = run(20 * 9, peak);
+    assert(g.position() < 40 && last > .4f);
+    run(300 * 9, peak);  // well into the shot, keys never held
+    assert(peak > .4f);
+    run(120 * 9, peak);  // past the end: the shot is done
+    last = run(400 * 9, peak);
+    assert(std::abs(last) < .001f && peak < .02f);
+    // The next trigger plays it again.
+    g.retrigger();
+    last = run(20 * 9, peak);
+    assert(last > .4f);
+    // One-shot: plays while held, stops on release...
+    g.setGate(kGateOneShot, true);
+    g.retrigger();
+    run(20 * 9, peak);
+    last = run(50 * 9, peak);
+    assert(last > .4f);
+    g.setGate(kGateOneShot, false);
+    last = run(400, peak);
+    assert(std::abs(last) < .001f);
+    // ...and stops at the end even while held.
+    g.setGate(kGateOneShot, true);
+    g.retrigger();
+    run(420 * 9, peak);
+    last = run(400 * 9, peak);
+    assert(std::abs(last) < .001f && peak < .02f);
+    // Back to hold: a held key loops again.
+    g.setGate(wingie_loop::kGateHold, true);
+    g.retrigger();
+    run(450 * 9, peak);
+    last = run(20 * 9, peak);
+    assert(std::abs(last) > .4f);
+  }
+  assert(wingie_loop::gateModeFromCC(0) == wingie_loop::kGateOff);
+  assert(wingie_loop::gateModeFromCC(32) == wingie_loop::kGateHold && wingie_loop::gateModeFromCC(63) == wingie_loop::kGateHold);
+  assert(wingie_loop::gateModeFromCC(64) == wingie_loop::kGateOneShot);
+  assert(wingie_loop::gateModeFromCC(127) == wingie_loop::kGateTrigger);
+
   // Playback window: start/end as shares of the recording.
   {
     std::vector<uint8_t> buf(1000);

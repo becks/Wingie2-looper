@@ -40,6 +40,9 @@ static const int kLooperLatchMin = 0;
 static const int kLooperLatchMax = 1;
 static const int kLooperLiveInputMin = 0;
 static const int kLooperLiveInputMax = 1;
+// What the note keys play: 0 resonator, 1 audio loop, 2 both (key_target.h).
+static const int kKeyTargetMin = 0;
+static const int kKeyTargetMax = 2;
 static const float kClipGainMax = 0.99f;
 static const float kDefaultA3Frequency = 440.0f;
 static const float kDefaultPreClipGain = 0.2475f;
