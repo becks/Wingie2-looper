@@ -93,8 +93,10 @@ local function request(op, fields, cb)
   next_id = next_id + 1
   local obj = {v = 1, id = id, op = op}
   for k, v in pairs(fields or {}) do obj[k] = v end
-  table.insert(queue, {id = id, op = op, line = json.encode(obj), cb = cb})
+  local req = {id = id, op = op, obj = obj, line = json.encode(obj), cb = cb}
+  table.insert(queue, req)
   send_next()
+  return req
 end
 
 local function queued(op)
@@ -243,6 +245,30 @@ local function advance_levels(now)
   end
 end
 
+local sync_params  -- defined with the norns params
+
+-- A loop_status answer: the model, waveforms and notes, levels, params.
+local function on_status(ok, r)
+  if not ok then
+    local code = r.error and r.error.code
+    if code ~= "timeout" then say("loop_status: " .. tostring(code)) end
+    return false
+  end
+  -- The firmware uptime going backwards means the Wingie2 rebooted.
+  if stats.last_ms and r.ms < stats.last_ms then stats.resets = stats.resets + 1 end
+  stats.last_ms = r.ms
+  stats.polls = stats.polls + 1
+  status = r
+  status_at = util.time()
+  for i = 1, 2 do
+    refresh_wave(i, status_at)
+    refresh_notes(i)
+  end
+  queue_levels(r.lv)
+  sync_params()
+  return true
+end
+
 local function poll()
   check_timeout()
   if dev and not connected and hello_at and util.time() >= hello_at then
@@ -250,31 +276,45 @@ local function poll()
     hello()
   end
   if not connected or queued("loop_status") then return end
-  request("loop_status", {}, function(ok, r)
-    if not ok then
-      local code = r.error and r.error.code
-      if code ~= "timeout" then say("loop_status: " .. tostring(code)) end
+  request("loop_status", {}, on_status)
+end
+
+-- MIDI-mapped params can arrive while no page is showing, so without the poll
+-- metro: time out a lost answer here, and say hello first if not yet connected.
+local function wake()
+  check_timeout()
+  if dev and not connected and not queued("hello") then
+    hello_at = nil
+    hello()
+  end
+end
+
+-- A knob sends many values: one still waiting in the queue for the same target and
+-- name takes the new value instead of queueing another request.
+local function set_param(target, name, value)
+  if not dev then return end
+  wake()
+  for _, r in ipairs(queue) do
+    if r.op == "set_param" and r.obj.target == target and r.obj.name == name then
+      r.obj.value = value
+      r.line = json.encode(r.obj)
       return
     end
-    -- The firmware uptime going backwards means the Wingie2 rebooted.
-    if stats.last_ms and r.ms < stats.last_ms then stats.resets = stats.resets + 1 end
-    stats.last_ms = r.ms
-    stats.polls = stats.polls + 1
-    status = r
-    status_at = util.time()
-    for i = 1, 2 do
-      refresh_wave(i, status_at)
-      refresh_notes(i)
-    end
-    queue_levels(r.lv)
+  end
+  request("set_param", {target = target, name = name, value = value}, function(ok, r)
+    if not ok then say(name .. ": " .. tostring(r.error and r.error.code), 2) end
+    poll()
   end)
 end
 
-local function set_param(target, name, value)
-  if not connected then return end
-  request("set_param", {target = target, name = name, value = value}, function(ok, r)
-    if not ok then say(name .. ": " .. tostring(r.error and r.error.code)) end
-    poll()
+-- Runs fn with a fresh status: the polled one while a page shows, else asked for.
+local STATUS_FRESH = 0.5
+local function with_status(fn)
+  if status and util.time() - status_at < STATUS_FRESH then return fn() end
+  if not dev then return end
+  wake()
+  request("loop_status", {}, function(ok, r)
+    if on_status(ok, r) then fn() end
   end)
 end
 
@@ -647,6 +687,238 @@ function core.key(n, z)
     for _, w in ipairs(sides) do w.wave_length = -1; w.notes_revision = -1 end
     stats.rtt_max = 0
   end
+end
+
+----------------------------------------------------------------------------
+-- norns params: the controls in the PARAMS menu (group WINGIE2), so that they can
+-- be mapped to a MIDI controller with norns' MIDI learn (PARAMS > MAP). A param
+-- sends its value as the CTRL page does; the polled status moves the params
+-- (silently) to what the Wingie2 has, so the panel and the pages stay in step.
+
+local function unit_spec(default)
+  return controlspec.new(0, 1, "lin", 0.01, default, "")
+end
+
+local function step_spec(min, max, step, default)
+  return controlspec.new(min, max, "lin", step, default, "", step / (max - min))
+end
+
+local OFF_ON = {"off", "on"}
+
+-- kind: "control" (spec, wire = value), "option" (wire = index - 1), "binary"
+-- (toggle, wire 0/1). get(s, st, i) reads the value in wire units from the side's
+-- loop_status entry s, the whole status st and the side index i.
+local SIDE_PARAMS = {
+  {id = "mode", name = "mode", kind = "option", options = MODES, get = function(s) return s.m end},
+  {id = "volume", name = "volume", kind = "control", spec = function() return unit_spec(0.25) end,
+   get = function(s) return s.x[3] end},
+  {id = "mix", name = "mix", kind = "control", spec = function() return unit_spec(1) end,
+   get = function(s) return s.x[1] end},
+  {id = "decay", name = "decay", kind = "control",
+   spec = function() return controlspec.new(0.1, 10, "exp", 0.01, 5, "s") end,
+   get = function(s) return s.x[2] end},
+  {id = "threshold", name = "threshold", kind = "control",
+   spec = function() return step_spec(0.0825, 0.99, 0.0825, 0.0825) end,
+   get = function(s, st, i) return st.t and st.t[i] end},
+  {id = "pan", name = "pan", kind = "control", spec = function(i) return unit_spec(i == 1 and 0 or 1) end,
+   get = function(s) return s.x[4] end},
+  {id = "filter_type", name = "filter", kind = "option", options = FILTER_TYPES,
+   get = function(s) return s.f and s.f[1] end},
+  {id = "filter_cutoff", name = "cutoff", kind = "control",
+   spec = function() return controlspec.new(20, 16000, "exp", 1, 1000, "Hz") end,
+   get = function(s) return s.f and s.f[2] end},
+  {id = "filter_resonance", name = "resonance", kind = "control", spec = function() return unit_spec(0) end,
+   get = function(s) return s.f and s.f[3] end},
+  {id = "speed_step", name = "speed", kind = "option", options = SPEED_LABELS, default = 5,
+   get = function(s) return nearest_step(s.a[5]) - 1 end},
+  {id = "speed_mode", name = "speed mode", kind = "option", options = SPEED_MODES,
+   get = function(s) return s.a[9] end},
+  {id = "sos", name = "sos", kind = "control", spec = function() return unit_spec(0.8) end,
+   get = function(s) return s.a[8] end},
+  {id = "looper_level", name = "loop level", kind = "control", spec = function() return unit_spec(1) end,
+   get = function(s) return s.a[6] end},
+  {id = "looper_start", name = "loop start", kind = "control", spec = function() return unit_spec(0) end,
+   get = function(s) return s.a[12] end},
+  {id = "looper_end", name = "loop end", kind = "control", spec = function() return unit_spec(1) end,
+   get = function(s) return s.a[13] end},
+  {id = "looper_post", name = "loop post", kind = "binary", get = function(s) return s.a[10] end},
+  {id = "looper_gate", name = "loop gate", kind = "binary", get = function(s) return s.a[11] end},
+}
+
+local SHARED_PARAMS = {
+  {id = "pre_clip_gain", name = "pre clip gain", kind = "control",
+   spec = function() return step_spec(0.0825, 0.99, 0.0825, 0.495) end,
+   get = function(st) return st.g and st.g[1] end},
+  {id = "post_clip_gain", name = "post clip gain", kind = "control",
+   spec = function() return step_spec(0.385, 0.99, 0.055, 0.495) end,
+   get = function(st) return st.g and st.g[2] end},
+  {id = "looper_live_input", name = "live input", kind = "binary", get = function(st) return st.live end},
+  -- 2 (locked) is a panel state: the setting itself is on/off
+  {id = "looper_latch", name = "latch", kind = "binary",
+   get = function(st) return st.latch and math.min(st.latch, 1) end},
+  {id = "line_input_mono", name = "line in mono", kind = "binary", get = function(st) return st.mono end},
+}
+
+-- Loop transport, as K2/K3 on the LOOP pages, and clear (MIDI CC 80 = 4).
+local SIDE_TRIGGERS = {
+  {id = "rec", name = "rec / dub", run = function(side) record_or_overdub(side) end},
+  {id = "stop", name = "stop / play", run = function(side) stop_or_play(side) end},
+  {id = "clear", name = "clear", run = function(side) send_state(side, 4) end},
+}
+
+local PARAM_PREFIX = "wingie_"
+local LETTERS = {"a", "b"}
+local defined = {}     -- param id -> {p = spec, side = 1, 2 or 0 (shared)}
+local touched = {}     -- param id -> time it was last changed here
+local known = {}       -- param id -> value last sent or read from the Wingie2
+
+local function param_id(p, side)
+  return PARAM_PREFIX .. p.id .. (side > 0 and ("_" .. LETTERS[side]) or "")
+end
+
+local function to_wire(p, v)
+  if p.kind == "option" then return v - 1 end
+  return v
+end
+
+local function from_wire(p, w)
+  if p.kind == "option" then return math.floor(w + 0.5) + 1 end
+  if p.kind == "binary" then return w > 0 and 1 or 0 end
+  return w
+end
+
+-- A value the Wingie2 already has is not sent: params:bang() from a script then
+-- does not push stale values over what was played on the panel.
+local function send_param(id, v)
+  local d = defined[id]
+  if known[id] == v then return end
+  known[id] = v
+  touched[id] = util.time()
+  local w = to_wire(d.p, v)
+  pending[d.p.id .. d.side] = {value = w, at = util.time()}
+  set_param(d.side > 0 and SIDE_NAMES[d.side] or "shared", d.p.id, w)
+end
+
+local function add_param(p, side)
+  local id = param_id(p, side)
+  local name = (side > 0 and (side == 1 and "A " or "B ") or "") .. p.name
+  if p.kind == "option" then
+    params:add_option(id, name, p.options, p.default or 1)
+  elseif p.kind == "binary" then
+    params:add_binary(id, name, "toggle", 0)
+  else
+    params:add_control(id, name, p.spec(side))
+  end
+  params:set_action(id, function(v) send_param(id, v) end)
+  -- the Wingie2 keeps these: not in the script's PSETs
+  params:set_save(id, false)
+  defined[id] = {p = p, side = side}
+  known[id] = params:get(id)
+end
+
+-- Only a real change is set: a mapping with echo on sends its CC on every set.
+local function differs(id, p, v)
+  if p.kind ~= "control" then return params:get(id) ~= v end
+  local param = params:lookup_param(id)
+  return math.abs(param.raw - param.controlspec:unmap(v)) > 0.0005
+end
+
+-- Moves the params to the polled status, without their actions, except one just
+-- changed here (the Wingie2 has not caught up yet).
+sync_params = function()
+  if not params or not status or not status.sides then return end
+  local now = util.time()
+  for id, d in pairs(defined) do
+    if params.lookup[id] and not (touched[id] and now - touched[id] < PENDING_HOLD) then
+      local w
+      if d.side > 0 then
+        local s = side_status(d.side)
+        w = s and d.p.get(s, status, d.side)
+      else
+        w = d.p.get(status)
+      end
+      if w ~= nil and differs(id, d.p, from_wire(d.p, w)) then
+        params:set(id, from_wire(d.p, w), true)
+        known[id] = params:get(id)
+      end
+    end
+  end
+end
+
+-- Mappings of these params in a file of their own, so that with the mod they follow
+-- from one script to the next (norns keeps one map per script).
+local PMAP_FILE = "wingie_monitor/params.pmap"
+local saved_maps = {}   -- id -> mapping, as last saved
+local kept_maps = {}    -- ids not restored (their CC is mapped by the script): kept in the file
+
+local function pmap_path() return _path.data .. PMAP_FILE end
+
+local function copy_map(m)
+  local c = {}
+  for k, v in pairs(m) do c[k] = v end
+  return c
+end
+
+local function save_maps()
+  local out = {}
+  for id in pairs(kept_maps) do out[id] = saved_maps[id] end
+  for id, m in pairs(norns.pmap.data) do
+    if type(id) == "string" and id:sub(1, #PARAM_PREFIX) == PARAM_PREFIX then out[id] = copy_map(m) end
+  end
+  util.make_dir(_path.data .. "wingie_monitor")
+  tab.save(out, pmap_path())
+  saved_maps = out
+end
+
+local function restore_maps()
+  saved_maps = tab.load(pmap_path()) or {}
+  kept_maps = {}
+  local rev = norns.pmap.rev
+  for id, m in pairs(saved_maps) do
+    if params.lookup[id] and not norns.pmap.data[id] then
+      if rev[m.dev] and rev[m.dev][m.ch] and rev[m.dev][m.ch][m.cc] == nil then
+        norns.pmap.data[id] = copy_map(m)
+        rev[m.dev][m.ch][m.cc] = id
+      else
+        kept_maps[id] = true
+      end
+    end
+  end
+end
+
+-- norns writes the script's map whenever a mapping changes: save ours with it.
+local function hook_pmap_write()
+  local pmap = norns.pmap
+  if pmap._wingie_write then return end
+  local write = pmap.write
+  pmap._wingie_write = true
+  pmap.write = function(...)
+    write(...)
+    local ok, err = pcall(save_maps)
+    if not ok then print("wingie monitor: saving MIDI maps failed: " .. tostring(err)) end
+  end
+end
+
+-- Adds the WINGIE2 group to the PARAMS menu; once per script (the mod calls it
+-- after every script's init, the script from its own).
+function core.add_params()
+  if not params or params.lookup[param_id(SIDE_PARAMS[1], 1)] then return end
+  defined, touched, known = {}, {}, {}
+  params:add_group("wingie_monitor", "WINGIE2", 2 * (#SIDE_PARAMS + #SIDE_TRIGGERS) + #SHARED_PARAMS)
+  for side = 1, 2 do
+    for _, p in ipairs(SIDE_PARAMS) do add_param(p, side) end
+    for _, t in ipairs(SIDE_TRIGGERS) do
+      -- a binary trigger, not add_trigger: norns can map only the former to MIDI
+      local id = param_id(t, side)
+      params:add_binary(id, (side == 1 and "A " or "B ") .. t.name, "trigger")
+      params:set_action(id, function() with_status(function() t.run(side) end) end)
+      params:set_save(id, false)
+    end
+  end
+  for _, p in ipairs(SHARED_PARAMS) do add_param(p, 0) end
+  restore_maps()
+  hook_pmap_write()
+  sync_params()
 end
 
 ----------------------------------------------------------------------------
