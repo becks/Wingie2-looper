@@ -206,6 +206,8 @@ Factory defaults: left = channel 1, right = channel 2, both = channel 3. These c
 
 **CC 9 — Direct mode select** (v4.30-duallooper.10 or later): value = mode number, 0–18 (see [Additional Resonator Modes](#additional-resonator-modes)); larger values are ignored.
 
+**CC 95 — What the note keys play** (v4.30-duallooper.14 or later): 0–42 the resonator (default), 43–85 the audio loop, transposed like a sampler (C in the middle octave plays it as recorded), 86–127 both. Saved with the other settings.
+
 > As of v4, CC 0 changed from the original four bands (0-31 / 32-63 / 64-95 / 96-127 + 127 as a single point) to a five-way even split. If you previously used fixed CC values to switch modes, re-check them against this table.
 
 **Fader CC**:
@@ -232,6 +234,7 @@ On connection, the page reads one complete device snapshot. You can modify the f
 
 - **Left/right channels**: Mode (Poly / String / Bar / Cave / Ratio and the [additional resonator modes](#additional-resonator-modes)), Input Threshold
 - **Modes in the Mode Button Cycle**: which modes the panel Mode button steps through
+- **Keys Play** (left/right): what the note keys and MIDI notes play: the resonator, the audio loop (transposed) or both
 - **Shared settings**: A3 frequency (358.08–521.91 Hz), Tuning (Standard + 8 alternate tunings), Pre/Post Clip Gain, three MIDI channel routes, MPE switch, line-input stereo/mono
 - **Ratio Mode profile**: 9 resonator ratios (grouped into three Voices), with "Copy Voice 1 to Voices 2 & 3" and factory-reset buttons
 - **Caves**: 3 banks per channel, each with 9 resonator frequencies and mute states
@@ -385,7 +388,7 @@ There are two ways to write current settings to flash so they persist after rest
 1. **Panel dual-button save**: Hold both Mode buttons simultaneously for three seconds. During the countdown, the LED cycles through the four colors and flashes when the countdown ends to indicate completion. This operation may cause a brief noise and is not recommended during recording or live performance.
 2. **Web Save to Flash**: Click "Save to Flash" and confirm in [USB Web Configuration](#9-usb-web-configuration).
 
-Saved settings include: A3 frequency, tuning, Pre/Post Clip Gain, three MIDI channel routes, left/right Mode and Input Threshold, the modes in the Mode button cycle, the shared Ratio profile, all three Cave banks per channel (frequencies and mute), the MPE switch, and line-input stereo/mono. Toggling line mono by holding both C keys at startup writes flash immediately and does not require the dual-button save.
+Saved settings include: A3 frequency, tuning, Pre/Post Clip Gain, three MIDI channel routes, left/right Mode and Input Threshold, the modes in the Mode button cycle, what each side's keys play, the shared Ratio profile, all three Cave banks per channel (frequencies and mute), the MPE switch, and line-input stereo/mono. Toggling line mono by holding both C keys at startup writes flash immediately and does not require the dual-button save.
 
 ## 15. Caves Mode and Alternate Tunings
 

@@ -17,7 +17,7 @@ Hold both Mode buttons, then press a key on the side whose looper you want to co
 | Key | Action |
 |---|---|
 | C | Audio: record |
-| C# | Audio: play; hold ½ s: gate mode on/off |
+| C# | Audio: play; hold ½ s: next gate mode (off → hold → one-shot → trigger) |
 | D | Audio: overdub |
 | D# | Audio: bypass (keeps the loop) |
 | Hold E (1 s) | Audio: clear the loop |
@@ -70,17 +70,22 @@ The loop stores audio at about 4.9 kHz, so a loop recorded after the resonator s
 than the resonator itself. After the resonator the loop takes that side's output channel as it
 leaves the pan, so with a non-default pan it records the stereo mix of that channel.
 
-**Gate mode.** Holding C# for half a second (six LED blinks: red on, white off; the press
-still starts playback) turns on that side's gate: the playing loop is silent until a note key
-or a MIDI note on the side's channel is held, and each new key or note restarts it from the
-beginning (from the end in reverse) after a ~2 ms fade, so retriggers do not click. Releasing
-every key closes the gate. Before the resonator, the key also sets the resonator note, so the
+**Gate mode.** Holding C# for half a second (the press still starts playback) steps that
+side's gate through four modes, shown by six LED blinks: **off** (white), **hold** (red),
+**one-shot** (yellow) and **trigger** (purple). In every gated mode the playing loop is silent
+until a note key or a MIDI note on the side's channel arrives, and each new key or note
+restarts it from the beginning (from the end in reverse) after a ~2 ms fade, so retriggers
+do not click. **Hold** loops while a key is held and stops when every key is released;
+**one-shot** plays the loop (or its playback window) once and stops at the end, or earlier on
+release; **trigger** plays it once to the end whatever the release, like a sampler's one-shot. Before the resonator, the key also sets the resonator note, so the
 loop becomes the exciter of the note you play; after it, the loop is a sample you trigger.
-Keys replayed by the note looper restart the loop too, and keep the gate open while the
-sequence plays. Overdub ignores the gate. Cave keys edit mutes and do not trigger it.
+Keys replayed by the note looper restart the loop too; in hold they keep the gate open while
+the sequence plays, in trigger each replayed key plays one shot. With [Keys play](#keys-play-the-loop)
+set to Loop, the keys also transpose each shot. Overdub ignores the gate. Cave keys edit mutes and do not trigger it.
 
-Both settings are also available as MIDI CC 88 and 89 and in the Loop Monitor, and return to
-before the resonator with the gate off at power-on.
+Both settings are also available as MIDI CC 88 and 89 (CC 89: 0–31 off, 32–63 hold, 64–95
+one-shot, 96–127 trigger; from v4.30-duallooper.14, before which 64–127 meant on) and in the
+Loop Monitor, and return to before the resonator with the gate off at power-on.
 
 Each loop also has a playback window: its start and end (MIDI CC 90 and 91, the Loop Monitor
 by dragging the edges on the waveform, or the norns CTRL page) choose the part of the recording
@@ -101,7 +106,7 @@ each audio loop restart flashes the side purple (white in Cave mode).
 [`Tools/loop_monitor.html`](Tools/loop_monitor.html) is a single-file page that shows
 both loopers live over USB: audio loop waveform and play position, note loop events, length, speed,
 level and direction, the panel keys and controls, the looper latch (Locked while the layer is locked), and input/output levels (scrolling waveform plus a dot meter that turns red on clipping). Its only controls are each
-side's Mode select (any of the [resonator modes](#resonator-modes), v4.30-duallooper.10 or later), Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
+side's Mode select (any of the [resonator modes](#resonator-modes), v4.30-duallooper.10 or later), Keys select ([what the keys play](#keys-play-the-loop), v4.30-duallooper.14 or later), Pan slider (see below), SOS slider (sound on sound: the share of the loop kept on each
 overdub pass, 0–100%, same as MIDI CC 83; starts at 80% and is not saved), speed mode buttons
 (varispeed / pitch / stretch, MIDI CC 87), speed step buttons (the same steps as F/G, MIDI CC 86)
 and the Looper latch and Live input in playback checkboxes (running state, saved like the other
@@ -165,6 +170,27 @@ configuration page and the Loop Monitor select any mode directly, and so does MI
 side's channel (value = mode number, 0–18). CC 0 keeps its five bands for the original modes.
 Requires v4.30-duallooper.10 or later.
 
+## Keys play the loop
+
+Each side's note keys (and MIDI notes) can play the resonator as always, the audio loop, or
+both. Choose with **Keys Play** in the [configuration page](#wingie2-usb-configuration)
+(saved), the Loop Monitor's Keys select, the norns CTRL page or params, or MIDI CC 95 on the
+side's channel (0–42 resonator, 43–85 loop, 86–127 both).
+
+- **Resonator** (default): the keys set the resonator's notes; the loop is untouched.
+- **Loop**: the keys transpose the loop like a sampler, in semitones. C with the octave switch
+  in the middle plays it as recorded, so the panel covers an octave below to almost two above
+  (0.5–3.8×). For MIDI notes the side's panel C (48 left, 60 right) is the reference, within
+  two octaves either way. The resonator stays on its last note.
+- **Both**: each key sets the resonator note and transposes the loop by the same interval.
+
+The speed mode decides how the loop moves: varispeed like tape (pitch and length together),
+pitch (the loop keeps its length; slightly granular) or stretch (length only). The octave
+switch moves a transposed loop with it, F/G and the speed buttons still step from wherever the
+loop is, and the last command wins. Recorded note loops replay through the same path, so with
+Loop the note looper plays melodies with the audio loop. Cave mode keeps its keys for mutes.
+Requires v4.30-duallooper.14 or later.
+
 ## Stereo pan
 
 Each side's output (resonator plus dry signal) can be placed anywhere in the stereo field with an
@@ -206,7 +232,7 @@ CC 10 = 64 is the center). A pan received over MIDI is also kept by the next Sav
 运行的共享实体旋钮参数，直接由 Wingie2 面板控制，不写入 flash。
 
 Save 会持久化 A3、Tuning、Pre/Post Clip Gain、三个 MIDI 通道路由、左右 Mode 与 Input
-Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、Looper 播放时的实时输入、Mode 按键循环包含的模式、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
+Threshold、MPE 开关、线路输入立体声/单声道、Looper 锁定、Looper 播放时的实时输入、Mode 按键循环包含的模式、左右音符键演奏的对象（共鸣器 / 循环 / 两者）、共享 Ratio profile，以及左右各 3 个 Cave bank 的频率和 mute。Ratio profile 由
 左右声道共用，9 个 ratio 按每 3 个一组分为 Voice 1/2/3；Ratio 模式下三个复音分别使用
 Voice 1/2/3 的比例，页面提供“复制 Voice 1 到 Voice 2、3”按钮将 Voice 1 的比例复制到另外两组 Voice。
 Factory Ratio 和导入配置都先改变运行状态，仍需 Save。Cave 频率范围为
@@ -244,7 +270,7 @@ not display or edit Mix, Decay, or Volume: those are runtime-only shared physica
 and are not written to flash.
 
 Save persists A3, Tuning, Pre/Post Clip Gain, all three MIDI channel routes, left/right Mode, Input
-Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, live input during playback, the modes in the Mode button cycle, the shared Ratio profile, and all three Cave banks
+Threshold and Pan, the MPE switch, line-input stereo/mono, the looper latch, live input during playback, the modes in the Mode button cycle, what each side's keys play (Keys Play), the shared Ratio profile, and all three Cave banks
 for each channel, including frequency and mute. The shared Ratio profile's nine ratios are grouped into Voices 1/2/3, three ratios per
 voice; in Ratio polyphonic mode, the three voices use the ratios of Voices 1/2/3 respectively, and the
 “Copy Voice 1 to Voices 2&3” button copies Voice 1's ratios into the other two voices. Factory Ratio
