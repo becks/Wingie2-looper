@@ -191,7 +191,6 @@ unsigned long looperLatchFlashTimer = 0;
 bool looper_live_input = false;
 // Modes the Mode button steps through (bit n = mode n); every mode by default.
 volatile uint32_t mode_cycle = wingie_modes::kDefaultCycleMask;
-bool looperReverse[2] = {false, false};
 uint8_t looperLevel[2] = {127, 127};
 unsigned long looperClearStarted[2] = {0, 0};
 // F/G in the looper layer: the key held (-1 none) and when, decided on release or hold.

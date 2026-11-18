@@ -434,6 +434,9 @@
       {key: "gate", name: "looper_gate", label: "Gate",
        title: "Keys and MIDI notes play the loop from its start (MIDI CC 89; panel: hold both Mode buttons and C# for ½ s). Off at power-on. With firmware that has gate modes, a click steps off → hold (loops while held) → one-shot (plays once, stops on release) → trigger (plays once to the end)."},
     ];
+    // Reverse playback (set_param looper_reverse), on firmware that has it.
+    ROUTING.push({key: "reverse", name: "looper_reverse", label: "Reverse",
+      title: "Play the loop backwards (MIDI CC 85; panel: hold both Mode buttons and B). Off at power-on."});
     // Gate modes (firmware with gate_modes); older firmware has only off/on.
     const GATE_MODES = ["off", "hold", "one-shot", "trigger"];
     // Panel ranges as the firmware applies them (decay in the DSP's units).
@@ -505,6 +508,7 @@
     let levelSupported = false;  // set_param looper_level
     let windowSupported = false;
     let gateModesSupported = false;  // looper_gate 0-3 (off, hold, one-shot, trigger)
+    let reverseSupported = false;  // set_param looper_reverse
     let pollTimer = null;
     let statusBusy = false;
 
@@ -967,6 +971,7 @@
         levelSupported = (hello.capabilities || []).includes("looper_level");
         windowSupported = (hello.capabilities || []).includes("looper_window");
         gateModesSupported = (hello.capabilities || []).includes("gate_modes");
+        reverseSupported = (hello.capabilities || []).includes("looper_reverse");
         try {
           await request("loop_status");
         } catch (error) {
@@ -1316,6 +1321,7 @@
         ui.routingButtons.forEach((button, index) => {
           const toggle = ROUTING[index];
           button.setAttribute("aria-pressed", String(Boolean(audio[toggle.key])));
+          if (toggle.key === "reverse") button.hidden = !reverseSupported;
           if (toggle.key === "gate") {
             button.textContent = gateModesSupported ? "Gate " + (GATE_MODES[audio.gate] || "?") : toggle.label;
           }
