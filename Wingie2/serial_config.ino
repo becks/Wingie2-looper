@@ -481,7 +481,8 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     return true;
   }
   // Master low cut (Hz, 0 off) and compressor (threshold dBFS, ratio n:1 with 1 off,
-  // makeup dB) in the AC101 codec; applied by the control task. Runtime only.
+  // makeup dB) in the AC101 codec, mono bass (Hz, 0 off) in the DSP; applied by the
+  // control task. Runtime only.
   {
     int *field = nullptr;
     int lo = 0, hi = 0;
@@ -497,6 +498,8 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       field = &masterDynamics.attack; lo = wingie_master::kAttackMin; hi = wingie_master::kAttackMax;
     } else if (strcmp(request.name, "comp_release") == 0) {
       field = &masterDynamics.release; lo = wingie_master::kReleaseMin; hi = wingie_master::kReleaseMax;
+    } else if (strcmp(request.name, "mono_bass") == 0) {
+      field = &masterDynamics.monoBass; lo = 0; hi = wingie_master::kMonoBassMax;
     }
     if (field) {
       int value;

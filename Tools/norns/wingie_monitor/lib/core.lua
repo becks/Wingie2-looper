@@ -641,6 +641,15 @@ local ROWS = {
    get = function(st) return st.md and st.md[6] or 200 end,
    show = function(v) return string.format("%dms", v) end,
    step = function(v, d) return util.clamp(v + d * math.max(10, math.floor(v / 10 / 10) * 10), 10, 2000) end},
+  -- below this frequency left and right are summed to the centre (ESP32, md[7])
+  {label = "mono bass", name = "mono_bass", shared = true, master = true,
+   get = function(st) return st.md and st.md[7] or 0 end,
+   show = function(v) return v <= 0 and "off" or string.format("%dHz", v) end,
+   step = function(v, d)
+     if v <= 0 then return d > 0 and 40 or 0 end
+     local hz = v + d * 5
+     return hz < 40 and 0 or math.min(hz, 300)
+   end},
 }
 local row_sel = 1
 -- The loop a LOOP page acts on (1 A, 2 B), nil on the other pages.
@@ -857,6 +866,9 @@ local SHARED_PARAMS = {
   {id = "comp_release", name = "comp release", kind = "control",
    spec = function() return controlspec.new(10, 2000, "exp", 1, 200, "ms") end,
    get = function(st) return st.md and st.md[6] end},
+  {id = "mono_bass", name = "mono bass", kind = "control",
+   spec = function() return controlspec.new(0, 300, "lin", 5, 0, "Hz") end,
+   get = function(st) return st.md and st.md[7] end},
 }
 
 -- Loop transport, as K2/K3 on the LOOP pages, and clear (MIDI CC 80 = 4).

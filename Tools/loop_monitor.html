@@ -250,7 +250,7 @@
       <div class="slider" title="Sequencer threshold, right"><span>Thresh R</span><div class="segments" id="step-threshold-right"></div><b id="value-threshold-right">–</b></div>
       <div class="slider" title="Pre clip gain"><span>Pre gain</span><div class="segments" id="step-pre-gain"></div><b id="value-pre-gain">–</b></div>
       <div class="slider" title="Post clip gain"><span>Post gain</span><div class="segments" id="step-post-gain"></div><b id="value-post-gain">–</b></div>
-      <div id="master" class="sliders" hidden title="Master low cut and compressor, computed by the codec on both outputs (no CPU cost). Runtime only for now: back to off at power-on.">
+      <div id="master" class="sliders" hidden title="Master low cut and compressor, computed by the codec on both outputs (no CPU cost), and mono bass. Runtime only for now: back to off at power-on.">
         <hr>
       </div>
     </section>
@@ -1620,6 +1620,11 @@
       {name: "comp_makeup", label: "Makeup", min: 0, max: 12, step: 1, show: (v) => "+" + v + " dB"},
       {name: "comp_attack", label: "Attack", min: 1, max: 200, step: 1, show: (v) => v + " ms"},
       {name: "comp_release", label: "Release", min: 10, max: 2000, step: 10, show: (v) => v + " ms"},
+      // md[6]; under 40 Hz is off (the firmware turns 1-39 into 40).
+      {name: "mono_bass", label: "Mono bass", min: 30, max: 300, step: 5, off: 30,
+       title: "Below this frequency left and right are summed to the centre; above it the stereo image is kept " +
+              "(12 dB/octave, computed by the ESP32 on the final output). Off at the far left.",
+       show: (v) => v <= 0 ? "Off" : v + " Hz"},
     ];
     const masterWrap = document.getElementById("master");
     let masterStatus;  // loop_status md; undefined on older firmware
@@ -1628,6 +1633,8 @@
       row.className = "slider";
       row.innerHTML = "<span></span><input type=\"range\"><b>–</b>";
       row.querySelector("span").textContent = control.label;
+      if (control.title) row.title = control.title;
+      control.row = row;
       const input = row.querySelector("input");
       Object.assign(input, {min: control.min, max: control.max, step: control.step});
       input.setAttribute("aria-label", control.label);
@@ -1638,6 +1645,7 @@
       control.busy = false;
       input.addEventListener("input", () => {
         control.wanted = Number(input.value);
+        if (control.off !== undefined && control.wanted <= control.off) control.wanted = 0;
         control.value.textContent = control.show(control.wanted);
         control.holdUntil = performance.now() + CONTROL_HOLD_MS;
         sendMaster(control);
@@ -1706,9 +1714,11 @@
       if (!masterStatus) return;
       renderReduction(now);
       MASTER.forEach((control, index) => {
-        if (control.busy || now <= control.holdUntil) return;
         const value = masterStatus[index];
-        if (Number(control.input.value) !== value) control.input.value = value;
+        control.row.hidden = value === undefined;  // mono bass needs a newer firmware
+        if (value === undefined || control.busy || now <= control.holdUntil) return;
+        const position = control.off !== undefined && value <= 0 ? control.off : value;
+        if (Number(control.input.value) !== position) control.input.value = position;
         setValue(control.value, control.show(value), now);
       });
     }

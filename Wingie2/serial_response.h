@@ -360,7 +360,8 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // x: [mix, decay, volume] as the DSP currently has them, then the side's pan
 // f: side output filter [type, cutoff Hz, resonance, target (0 all, 1 loop only)]
 // kt: what the note keys play (0 resonator, 1 loop, 2 both)
-// md: master low cut Hz (0 off), compressor threshold dB, ratio (1 off), makeup dB, attack ms, release ms
+// md: master low cut Hz (0 off), compressor threshold dB, ratio (1 off), makeup dB, attack ms, release ms,
+// mono bass Hz (0 off)
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
@@ -385,8 +386,9 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
                     static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan,
                     side.filterType, side.filterCutoff, side.filterResonance, side.filterTarget, side.keyTarget);
   }
-  response.append("],\"md\":[%d,%d,%d,%d,%d,%d]", snapshot.master.lowCut, snapshot.master.threshold,
-                  snapshot.master.ratio, snapshot.master.makeup, snapshot.master.attack, snapshot.master.release);
+  response.append("],\"md\":[%d,%d,%d,%d,%d,%d,%d]", snapshot.master.lowCut, snapshot.master.threshold,
+                  snapshot.master.ratio, snapshot.master.makeup, snapshot.master.attack, snapshot.master.release,
+                  snapshot.master.monoBass);
   response.append(",\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
                   snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");
   static const char kHex[] = "0123456789abcdef";

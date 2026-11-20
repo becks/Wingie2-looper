@@ -54,5 +54,15 @@ int main() {
   assert(wild.lowCut == kLowCutMin && wild.threshold == kThresholdMin && wild.ratio == kRatioMax && wild.makeup == 0);
   Settings none; none.lowCut = -4;
   assert(sanitize(none).lowCut == 0);
+  // Mono bass: 0 off, else 40-300 Hz.
+  Settings mono; mono.monoBass = 10;
+  assert(sanitize(mono).monoBass == kMonoBassMin);
+  mono.monoBass = 999;
+  assert(sanitize(mono).monoBass == kMonoBassMax);
+  mono.monoBass = -1;
+  assert(sanitize(mono).monoBass == 0);
+  // It is not a codec setting: nothing turns on in the DAP for it.
+  mono.monoBass = 120;
+  assert(controlValue(mono) == 0 && enableValue(mono) == 0);
   printf("master_dynamics_test passed\n");
 }

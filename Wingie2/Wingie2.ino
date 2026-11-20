@@ -563,10 +563,11 @@ void persist_line_input_mono_now() {
 
 void apply_master_dynamics() {
   const wingie_master::Settings settings = wingie_master::sanitize(masterDynamics);
+  dsp.setMonoBass(settings.monoBass);
   const esp_err_t res = ac.SetMasterDynamics(settings);
-  Serial.printf("master dynamics: low cut %d Hz, comp %d dB %d:1 +%d dB %d/%d ms (%s)\n", settings.lowCut,
-                settings.threshold, settings.ratio, settings.makeup, settings.attack, settings.release,
-                res == ESP_OK ? "ok" : "i2c error");
+  Serial.printf("master dynamics: low cut %d Hz, comp %d dB %d:1 +%d dB %d/%d ms, mono bass %d Hz (%s)\n",
+                settings.lowCut, settings.threshold, settings.ratio, settings.makeup, settings.attack,
+                settings.release, settings.monoBass, res == ESP_OK ? "ok" : "i2c error");
 }
 
 void apply_looper_live_input() {

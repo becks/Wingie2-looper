@@ -320,7 +320,7 @@ static void testLoopMonitor() {
       "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
       "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800,2,1,0,0.1250,0.7500],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500],\"f\":[2,1234,0.35,1],\"kt\":1},"
       "{\"a\":[0,0,0,0,2.000,0.000,0,0.000,0,0,0,0.0000,0.0000],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000],\"f\":[0,0,0.00,0],\"kt\":0}],"
-      "\"md\":[0,-20,1,0,5,200],\"mono_active\":1,\"src\":\"line\",\"lv\":[\"00f0\",\"0102\",\"ff10\",\"0aab\"]}");
+      "\"md\":[0,-20,1,0,5,200,0],\"mono_active\":1,\"src\":\"line\",\"lv\":[\"00f0\",\"0102\",\"ff10\",\"0aab\"]}");
 
   // Worst case status fits a frame: the widest values of each field (gate mode, filter
   // type and key target are clamped by the firmware, so their widest is one digit).
@@ -330,7 +330,7 @@ static void testLoopMonitor() {
                        -1.0f, 10.0f, -1.0f, -1.0f, true, 3, -1.0f, -1.0f, 3, 16000.0f, -1.0f,
                        1, 2};
   }
-  status.master = {1000, -40, 20, 12, 200, 2000};
+  status.master = {1000, -40, 20, 12, 200, 2000, 300};
   status.ms = 4294967295u;
   status.threshold[0] = status.threshold[1] = -9.9999f;
   status.preClipGain = status.postClipGain = -9.9999f;

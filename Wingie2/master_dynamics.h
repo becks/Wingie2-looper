@@ -26,6 +26,9 @@ static constexpr int kMakeupMin = 0, kMakeupMax = 12, kDefaultMakeup = 0;
 static constexpr int kAttackMin = 1, kAttackMax = 200, kDefaultAttack = 5;
 static constexpr int kReleaseMin = 10, kReleaseMax = 2000, kDefaultRelease = 200;
 static constexpr float kEnergyMs = 10.0f;
+// Mono bass (computed by the ESP32, mono_bass.h, not the codec): 0 off, else the
+// frequency in Hz below which left and right are summed to the centre.
+static constexpr int kMonoBassMin = 40, kMonoBassMax = 300;
 
 struct Settings {
   int lowCut = 0;
@@ -34,6 +37,7 @@ struct Settings {
   int makeup = kDefaultMakeup;
   int attack = kDefaultAttack;
   int release = kDefaultRelease;
+  int monoBass = 0;
 };
 
 inline int clampInt(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -44,6 +48,7 @@ inline Settings sanitize(Settings s) {
   s.makeup = clampInt(s.makeup, kMakeupMin, kMakeupMax);
   s.attack = clampInt(s.attack, kAttackMin, kAttackMax);
   s.release = clampInt(s.release, kReleaseMin, kReleaseMax);
+  s.monoBass = s.monoBass <= 0 ? 0 : clampInt(s.monoBass, kMonoBassMin, kMonoBassMax);
   return s;
 }
 inline bool lowCutOn(const Settings& s) { return s.lowCut > 0; }

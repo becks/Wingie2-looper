@@ -184,12 +184,20 @@ power-on): `master_low_cut` (0 off, else 20–1000 Hz, -3 dB point, 6 dB/octave)
 `comp_threshold` (−40–0 dBFS of the 10 ms RMS), `comp_ratio` (1 off, 2–20 for n:1),
 `comp_makeup` (0–12 dB, the DRC's static-curve offset), `comp_attack` (1–200 ms, gain going
 down) and `comp_release` (10–2000 ms). `loop_status` reports them as `md` = [low cut,
-threshold, ratio, makeup, attack, release]; `hello` advertises `master_dynamics`. The control
+threshold, ratio, makeup, attack, release, mono bass]; `hello` advertises `master_dynamics`. The control
 task writes them to the codec over I2C (coefficients in `Wingie2/master_dynamics.h`, checked
 against the manual's examples in `tests/host/master_dynamics_test.cpp`). The codec cannot
 report the DRC's gain, so the Loop Monitor's Comp GR row estimates it from the output levels
 with the same settings. The Loop Monitor's output meters read the signal before the codec, so
 they do not show the low cut or the compression.
+
+`mono_bass` (0 off, else 40–300 Hz; runtime only) is computed by the ESP32, last on its output
+(after the side filters, before the codec): the side signal (L − R) / 2 goes through a 12
+dB/octave Butterworth high pass at that frequency while the mid (L + R) / 2 is untouched, so the
+bass below it comes out in the centre and the stereo image above it is kept. One filter per
+block; switching it on or off crossfades over one block (`Wingie2/mono_bass.h`,
+`tests/host/mono_bass_test.cpp`). It is the 7th value of `md`; firmware without it reports six.
+The output meters include it.
 
 Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
