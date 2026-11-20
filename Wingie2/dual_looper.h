@@ -21,6 +21,12 @@ inline const char* gateModeName(int mode) {
   return mode >= 0 && mode < kGateModeCount ? names[mode] : "?";
 }
 // CC 89: 0-31 off, 32-63 hold, 64-95 one-shot, 96-127 trigger.
+// What the side filter shapes: the whole side (resonator, dry signal and loop) or
+// only the loop's playback. CC 96: 0-63 all, 64-127 loop.
+enum FilterTarget : int { kFilterAll = 0, kFilterLoop = 1, kFilterTargetCount = 2 };
+inline int filterTargetFromCC(int value) { return value >= 64 ? kFilterLoop : kFilterAll; }
+inline const char* filterTargetName(int target) { return target == kFilterLoop ? "loop" : "all"; }
+
 inline int gateModeFromCC(int value) {
   if (value < 0) value = 0;
   if (value > 127) value = 127;
@@ -39,6 +45,7 @@ struct LoopView {
   // Side output filter (kept here so one view carries all per-side looper state).
   int filterType = 0;
   float filterCutoff = 1000, filterResonance = 0;
+  int filterTarget = 0;  // FilterTarget: the whole side or the loop only
 };
 class Loop {
 public:
@@ -161,10 +168,13 @@ private:
     cachedIndex_ = kNoCache;
     headsPlaced_ = false;
   }
-  // Live input mixed into playback (0 = the loop replaces it); overdub always uses -6 dB.
+  // Live input mixed into playback and overdub (0 = the loop replaces it).
   float liveInput_ = 0;
   // After the resonator the input is the resonator output, which always passes at unity.
   bool post_ = false;
+  // When set, the loop's playback goes here (n samples) and `output` gets only the
+  // input part, so the caller can process the playback alone (the loop-only filter).
+  float* wet_ = nullptr;
   // Gate mode: playback is heard only while the gate is open, and a trigger
   // restarts the loop once the gate has faded out (~2 ms), so retriggers do not click.
   // In one-shot and trigger modes the gate also closes when playback wraps (the shot
@@ -235,13 +245,16 @@ private:
                     float retention, const float* feedback, float cross, float pitch) {
     bool restart = restart_;
     restart_ = false;
+    float* const wet = wet_;
     if (!capacity_ || state_ == 0) {
       for (int k = 0; k < n; ++k) output[k] = input[k];
+      if (wet) for (int k = 0; k < n; ++k) wet[k] = 0;
       return;
     }
     int k = 0;
     for (; k < n && state_ == 1; ++k) {
       output[k] = input[k];
+      if (wet) wet[k] = 0;
       recordSum_ += limit(input[k]);
       if (++recordCount_ == kRateDivision) {
         at(length_++) = encode(recordSum_ * (1.0f / kRateDivision));
@@ -263,7 +276,9 @@ private:
     size_t position = position_, cached = cachedIndex_;
     float fraction = fraction_, smooth = smooth_, a = cachedA_, b = cachedB_;
     if (overdub) retention_ = retention;
-    const float inputGain = post_ ? 1.0f : overdub ? 0.5f : liveInput_;
+    // The live input is heard with the loop (playback and overdub alike) only with
+    // live input on; after the resonator its output always passes.
+    const float inputGain = post_ ? 1.0f : liveInput_;
     // The gate applies to playback only: overdub always lets the loop be heard.
     const bool gating = gateMode_ != kGateOff && state_ == 2;
     const bool shot = gating && gateMode_ >= kGateOneShot;
@@ -378,9 +393,15 @@ private:
       }
       smooth += 0.02f * (level - smooth);
       gate += kGateRate * ((restart ? 0.0f : gateTarget) - gate);
-      // During overdub (and playback with live input on), let the player hear the
-      // input as well as the existing loop. -6 dB keeps their combined drive controlled.
-      output[k] = sample * smooth * gate + input[k] * inputGain;
+      // With live input on, let the player hear the input as well as the existing
+      // loop. -6 dB keeps their combined drive controlled.
+      const float played = sample * smooth * gate;
+      if (wet) {
+        wet[k] = played;
+        output[k] = input[k] * inputGain;
+      } else {
+        output[k] = played + input[k] * inputGain;
+      }
       if (restart && !jumpReady && gate < kGateFloor && jump_) {
         // Silent now: the next block enters the new window; stay silent until then.
         jumpReady = true;
@@ -460,6 +481,8 @@ public:
   void setLiveInput(bool on) { liveInput_ = on ? 0.5f : 0; }
   // Audio task only: the loop sits after the resonator, so the input passes at unity.
   void setPost(bool on) { post_ = on; }
+  // Audio task only: split the next process() call (see wet_); null mixes as usual.
+  void setWetOutput(float* wet) { wet_ = wet; }
   // Audio task only: gate mode (GateMode) and whether a key or note holds the gate
   // open. Entering one-shot or trigger waits for a key before playing.
   void setGate(int mode, bool open) {

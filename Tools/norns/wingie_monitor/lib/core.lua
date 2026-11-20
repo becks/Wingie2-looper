@@ -26,6 +26,7 @@ local SPEED_STEPS = {1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2}
 local SPEED_LABELS = {"1/4", "1/2", "2/3", "3/4", "1", "4/3", "3/2", "2"}
 local SPEED_MODES = {"vari", "pitch", "strch"}
 local FILTER_TYPES = {"off", "LP", "HP", "BP"}
+local FILTER_TARGETS = {"all", "loop"}  -- set_param filter_target, MIDI CC 96
 -- What the note keys play (firmware with key_target): resonator, loop (transposed) or both.
 local KEY_TARGETS = {"reson", "loop", "both"}
 -- Gate modes (firmware with gate_modes; older firmware has off/on).
@@ -58,6 +59,7 @@ local has_filter = false  -- firmware has the side output filter (filter_*)
 local has_keys = false    -- firmware has key_target (the keys can play the loop)
 local has_gate_modes = false  -- looper_gate 0-3 (off, hold, one-shot, trigger)
 local has_reverse = false     -- set_param looper_reverse
+local has_filter_target = false  -- set_param filter_target
 
 -- device model
 local status = nil
@@ -158,8 +160,8 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state, has_window, has_filter, has_keys, has_gate_modes, has_reverse =
-        false, false, false, false, false, false
+      has_state, has_window, has_filter, has_keys, has_gate_modes, has_reverse, has_filter_target =
+        false, false, false, false, false, false, false
       for _, c in ipairs(r.capabilities or {}) do
         if c == "looper_state" then has_state = true end
         if c == "looper_window" then has_window = true end
@@ -167,6 +169,7 @@ local function hello()
         if c == "key_target" then has_keys = true end
         if c == "gate_modes" then has_gate_modes = true end
         if c == "looper_reverse" then has_reverse = true end
+        if c == "filter_target" then has_filter_target = true end
       end
       say("")
       for _, s in ipairs(sides) do s.wave_length = -1 end
@@ -579,6 +582,11 @@ local ROWS = {
   {label = "reso", name = "filter_resonance", filter = true,
    get = function(s) return s.f and s.f[3] or 0 end, show = pct,
    step = function(v, d) return util.clamp(math.floor(v * 100 + 0.5 + d) / 100, 0, 1) end},
+  -- what the filter shapes: the whole side or only the loop's playback
+  {label = "filter on", name = "filter_target", filter_target = true,
+   get = function(s) return s.f and s.f[4] or 0 end,
+   show = function(v) return FILTER_TARGETS[v + 1] or "?" end,
+   step = function(v, d) return d > 0 and 1 or 0 end},
   {label = "reverse", name = "looper_reverse", reverse = true,
    get = function(s) return s.a[7] or 0 end, show = onoff,
    step = function(v, d) return d > 0 and 1 or 0 end},
@@ -662,6 +670,10 @@ end
 local function change_row(row, side, d)
   if row.filter and not has_filter then
     say("flash firmware with the filter", 2)
+    return
+  end
+  if row.filter_target and not has_filter_target then
+    say("flash firmware with filter_target", 2)
     return
   end
   if row.reverse and not has_reverse then
@@ -758,6 +770,8 @@ local SIDE_PARAMS = {
    get = function(s) return s.f and s.f[2] end},
   {id = "filter_resonance", name = "resonance", kind = "control", spec = function() return unit_spec(0) end,
    get = function(s) return s.f and s.f[3] end},
+  {id = "filter_target", name = "filter on", kind = "option", options = FILTER_TARGETS,
+   get = function(s) return s.f and s.f[4] end},
   {id = "speed_step", name = "speed", kind = "option", options = SPEED_LABELS, default = 5,
    get = function(s) return nearest_step(s.a[5]) - 1 end},
   {id = "speed_mode", name = "speed mode", kind = "option", options = SPEED_MODES,

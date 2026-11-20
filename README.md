@@ -43,11 +43,12 @@ Bar mode). Holding both Mode buttons, the three-second save and single-Mode mode
 as before; only the tap of both Mode buttons, which otherwise changes both sides' modes, is
 taken over.
 
-**Live input during playback.** By default a playing loop replaces that side's live input; you
-hear the input with the loop only while overdubbing. Turn on Live Input During Loop Playback in
-the configuration page (or the Loop Monitor) to keep hearing the input at -6 dB, the overdub
-level, while loops play, without recording it. It applies to both sides and is saved with the
-other settings.
+**Live input during playback.** By default a playing or overdubbing loop replaces that side's
+live input: what you play is recorded in overdub but not heard until the loop comes round.
+Turn on Live Input During Loop Playback in the configuration page (or the Loop Monitor) to hear
+the input at -6 dB with the loop, in playback (without recording it) and in overdub (before
+v4.30-duallooper.15 overdub always let the input through). It applies to both sides and is
+saved with the other settings.
 
 Speed steps are pure ratios: 1/4, 1/2, 2/3, 3/4, 1, 4/3, 3/2, 2 (two octaves down to an octave
 up, through fourths and fifths). A short F or G press moves one step from the current speed;
@@ -94,7 +95,10 @@ plays the whole loop again. See [`DUAL_LOOPER.md`](DUAL_LOOPER.md).
 
 Each side has an output filter too: low, high or band pass with cutoff and resonance (MIDI
 CC 92, 93 and 94, the Loop Monitor or the norns CTRL page). It shapes everything the side
-plays, resonator and loops included, and is off at power-on.
+plays, resonator and loops included, and is off at power-on. Set it to **loop only** (MIDI
+CC 96, Loop only in the Loop Monitor, `filter on` on the norns CTRL page) and it filters just
+the loop's playback, leaving the resonator and the live input clean; with the loop before the
+resonator, the loop is filtered before it excites the resonator.
 
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).

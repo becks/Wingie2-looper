@@ -40,9 +40,14 @@ int main() {
   monitored.attach(monitorData, 64);
   monitored.command(1);
   for(int i=0;i<64*9;++i) monitored.process(0, 1, 1, 1, 0);
+  // Overdub follows live input: the input is heard (-6 dB) only with it on.
   monitored.command(3);
   float monitoredOut = monitored.process(.4f, 1, 1, 1, 0);
+  assert(std::abs(monitoredOut) < .01f);
+  monitored.setLiveInput(true);
+  monitoredOut = monitored.process(.4f, 1, 1, 1, 0);
   assert(monitoredOut > .19f && monitoredOut < .21f);
+  monitored.setLiveInput(false);
 
   // Playback replaces the live input unless live input is on (-6 dB, like overdub).
   monitored.command(2);
@@ -402,4 +407,45 @@ int main() {
       assert(w.position() < 300);
     }
   }
+
+  // Loop-only filter: with a wet buffer the playback comes out there alone and the
+  // output keeps only the input part; together they equal the usual mix.
+  {
+    uint8_t data[64], twinData[64];
+    wingie_loop::Loop split, twin;
+    split.attach(data, 64); twin.attach(twinData, 64);
+    split.command(1); twin.command(1);
+    float wet[16];
+    // Recording: nothing in the wet buffer, the input passes.
+    split.setWetOutput(wet);
+    float in[16], out[16];
+    for (int k = 0; k < 16; ++k) in[k] = .3f;
+    split.process(in, out, 16, 1.0f / wingie_loop::Loop::rateDivision(), 1, 1, nullptr, 0);
+    for (int k = 0; k < 16; ++k) assert(wet[k] == 0 && out[k] == .3f);
+    split.setWetOutput(nullptr);
+    for (int i = 0; i < 64 * 9; ++i) { split.process(.3f, 1, 1, 1, 0); twin.process(.3f, 1, 1, 1, 0); }
+    // twin recorded 16 fewer samples: catch up so both play the same frames.
+    for (int i = 0; i < 16; ++i) twin.process(.3f, 1, 1, 1, 0);
+    assert(split.state() == 2 && twin.state() == 2);
+    split.setLiveInput(true); twin.setLiveInput(true);
+    for (int k = 0; k < 16; ++k) in[k] = -.2f;
+    float mixed[16];
+    split.setWetOutput(wet);
+    split.process(in, out, 16, 1.0f / wingie_loop::Loop::rateDivision(), 1, 1, nullptr, 0);
+    split.setWetOutput(nullptr);
+    twin.process(in, mixed, 16, 1.0f / wingie_loop::Loop::rateDivision(), 1, 1, nullptr, 0);
+    for (int k = 0; k < 16; ++k) {
+      assert(std::abs(out[k] - (-.1f)) < .001f);  // live input at -6 dB only
+      assert(std::abs(out[k] + wet[k] - mixed[k]) < .001f);
+    }
+    assert(wet[0] > .01f && wet[15] > wet[0]);  // the loop's playback, its level fading in
+    // Without the buffer it mixes as before.
+    float again[16];
+    split.process(in, again, 16, 1.0f / wingie_loop::Loop::rateDivision(), 1, 1, nullptr, 0);
+    assert(again[0] - (-.1f) > .05f);
+  }
+  assert(wingie_loop::filterTargetFromCC(0) == wingie_loop::kFilterAll);
+  assert(wingie_loop::filterTargetFromCC(63) == wingie_loop::kFilterAll);
+  assert(wingie_loop::filterTargetFromCC(64) == wingie_loop::kFilterLoop);
+  assert(wingie_loop::filterTargetFromCC(127) == wingie_loop::kFilterLoop);
 }

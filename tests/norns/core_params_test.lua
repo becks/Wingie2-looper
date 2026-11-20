@@ -123,7 +123,7 @@ screen = {}
 local sent, outbox = {}, {}
 local device = {
   mode = {0, 0}, volume = {0.25, 0.25}, sos = {0.8, 0.8}, post = {0, 0}, state = {0, 0},
-  length = {0, 0}, pre_clip_gain = 0.495, live = 0,
+  length = {0, 0}, pre_clip_gain = 0.495, live = 0, filter_target = {0, 0},
 }
 local SIDE = {left = 1, right = 2}
 local handler
@@ -164,7 +164,7 @@ serial = {
         answer.sides[i] = {
           a = {device.state[i], device.length[i], 0, 90112, 1, 1, 0, device.sos[i], 0, device.post[i], 0, 0, 1},
           n = {0, 0, 0, 0, 0}, m = device.mode[i], o = 0, p = 60, k = 0,
-          x = {1, 5, device.volume[i], i == 1 and 0 or 1}, f = {0, 1000, 0},
+          x = {1, 5, device.volume[i], i == 1 and 0 or 1}, f = {0, 1000, 0, device.filter_target[i]},
         }
       end
       answer.lv = {"", "", "", ""}
@@ -227,6 +227,9 @@ check(device.mode[2] == 12, "mode option index 13 -> mode 12 (Fifths)")
 params:set("wingie_looper_post_a", 1)
 flush()
 check(device.post[1] == 1, "loop post toggle")
+params:set("wingie_filter_target_b", 2)
+flush()
+check(device.filter_target[2] == 1, "filter on: option 2 -> loop only")
 params:set("wingie_pre_clip_gain", 0.66)
 flush()
 check(math.abs(device.pre_clip_gain - 0.66) < 1e-6, "shared pre clip gain")

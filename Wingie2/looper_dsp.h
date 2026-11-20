@@ -42,6 +42,10 @@ class LooperDSP : public decorator_dsp {
   wingie_loop::SideFilter filter_[2];
   std::atomic<int> filterType_[2] {{0}, {0}};
   std::atomic<float> filterCutoff_[2] {{1000}, {1000}}, filterResonance_[2] {{0}, {0}};
+  // wingie_loop::FilterTarget per side: the whole side, or the loop's playback only
+  // (filtered before the resonator when the loop is pre, after it when post).
+  std::atomic<int> filterTarget_[2] {{wingie_loop::kFilterAll}, {wingie_loop::kFilterAll}};
+  float wet_[64] = {};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -140,6 +144,10 @@ public:
     out.filterType = filterType_[ch].load();
     out.filterCutoff = filterCutoff_[ch].load();
     out.filterResonance = filterResonance_[ch].load();
+    out.filterTarget = filterTarget_[ch].load();
+  }
+  void setFilterTarget(int ch, int target) {
+    if (ch >= 0 && ch < 2 && target >= 0 && target < wingie_loop::kFilterTargetCount) filterTarget_[ch].store(target);
   }
   void setFilterType(int ch, int type) {
     if (ch >= 0 && ch < 2 && type >= 0 && type < wingie_loop::kFilterTypeCount) filterType_[ch].store(type);
@@ -221,6 +229,7 @@ public:
       case 92: setFilterType(ch, wingie_loop::filterTypeFromCC(value)); break;
       case 93: setFilterCutoff(ch, wingie_loop::filterCutoffFromCC(value)); break;
       case 94: setFilterResonance(ch, value/127.0f); break;
+      case 96: setFilterTarget(ch, wingie_loop::filterTargetFromCC(value)); break;
     }
   }
   // Fills out[] with average/peak cycles per block (total, looper only) and the
@@ -267,28 +276,42 @@ public:
 private:
   void processLoop(int ch, const float* input, float* output, int n, const float* speed,
                    const float* level, const float* retention, const float* cross,
-                   const bool* reverse, const int* mode, bool captureFeedback) {
+                   const bool* reverse, const int* mode, bool captureFeedback, bool filterLoop) {
     // Pitch mode keeps the play position at 1x and shifts the grains; stretch
     // moves it at the speed while the grains keep the recorded pitch.
     float tempo, pitch;
     wingie_loop::speedModeRates(mode[ch], speed[ch], tempo, pitch);
     float step = tempo / wingie_loop::Loop::rateDivision();
     const float* feedback = captureFeedback ? feedback_[1-ch] : nullptr;
+    // Loop-only filter: the playback comes out alone, is filtered and mixed back.
+    loop_[ch].setWetOutput(filterLoop ? wet_ : nullptr);
     if (reverse[ch])
       loop_[ch].processReverse(input, output, n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
     else
       loop_[ch].process(input, output, n, step, level[ch], retention[ch], feedback, cross[ch], pitch);
+    if (filterLoop) {
+      loop_[ch].setWetOutput(nullptr);
+      runFilter(ch, wet_, n);
+      for (int k = 0; k < n; ++k) output[k] += wet_[k];
+    }
+  }
+  void runFilter(int ch, float* io, int n) {
+    const float rate = (float)getSampleRate();
+    filter_[ch].process(io, n, filterType_[ch].load(), filterCutoff_[ch].load(),
+                        filterResonance_[ch].load(), rate > 0 ? rate : 44100.0f);
   }
   // Resonators and loops, then the side filters last so they shape the whole side:
-  // resonator, dry signal and loops (included in the profile's total).
+  // resonator, dry signal and loops (included in the profile's total). A side whose
+  // filter is on the loop only filters inside processLoop instead.
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
-    computeLoops(count, inputs, outputs);
-    const float rate = (float)getSampleRate();
+    bool filterLoop[2];
     for (int ch = 0; ch < 2; ++ch)
-      filter_[ch].process(outputs[ch], count, filterType_[ch].load(), filterCutoff_[ch].load(),
-                          filterResonance_[ch].load(), rate > 0 ? rate : 44100.0f);
+      filterLoop[ch] = filterTarget_[ch].load() == wingie_loop::kFilterLoop;
+    computeLoops(count, inputs, outputs, filterLoop);
+    for (int ch = 0; ch < 2; ++ch)
+      if (!filterLoop[ch]) runFilter(ch, outputs[ch], count);
   }
-  void computeLoops(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
+  void computeLoops(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs, const bool* filterLoop) {
     float speed[2], level[2], retention[2], cross[2];
     bool reverse[2], post[2];
     int mode[2];
@@ -329,7 +352,7 @@ private:
       uint32_t loopStart = xthal_get_ccount();
 #endif
       for (int ch=0; ch<2; ++ch)
-        if (pre[ch]) processLoop(ch, inputs[ch]+offset, in[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback);
+        if (pre[ch]) processLoop(ch, inputs[ch]+offset, in[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback, filterLoop[ch]);
 #if LOOPER_PROFILE
       profBlockLoop_ += xthal_get_ccount() - loopStart;
 #endif
@@ -338,7 +361,7 @@ private:
       loopStart = xthal_get_ccount();
 #endif
       for (int ch=0; ch<2; ++ch)
-        if (active[ch] && post[ch]) processLoop(ch, out[ch], out[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback);
+        if (active[ch] && post[ch]) processLoop(ch, out[ch], out[ch], n, speed, level, retention, cross, reverse, mode, captureFeedback, filterLoop[ch]);
 #if LOOPER_PROFILE
       profBlockLoop_ += xthal_get_ccount() - loopStart;
 #endif

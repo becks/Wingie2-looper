@@ -87,6 +87,7 @@ and MPE zone notes stay on the resonator. `loop_status` reports the setting as `
 | 93 | Side filter cutoff | 0–127 = 20 Hz–16 kHz, exponential |
 | 94 | Side filter resonance | 0–127 = 0–100% |
 | 95 | What the note keys play | 0–42 resonator; 43–85 loop (transposed); 86–127 both; saved |
+| 96 | What the side filter shapes | 0–63 the whole side; 64–127 the loop only |
 
 SOS (sound on sound, CC 83) is the share of the existing loop kept on each overdub pass:
 at 0% each pass replaces the loop, at 100% nothing fades. It is set per side, is not
@@ -121,11 +122,12 @@ configured dry/wet mix. Loop boundaries use a short fade. In varispeed, speeds o
 half a grain apart, triangular crossfade): in pitch mode the play position moves at 1× and
 the heads at the speed; in stretch mode the play position moves at the speed and the heads
 at 1×. The grains are computed every second audio sample and interpolated, since the
-loop holds nothing above ~2.4 kHz. During overdub, the live input is mixed at -6 dB with the existing loop
-so new material is heard immediately; it is averaged and written once per low-rate
-buffer position. In playback the loop replaces the live input, unless `looper_live_input`
-(shared, 0/1, configuration page or Loop Monitor; saved, off by default) is on: then the input
-is mixed in at the same -6 dB without being recorded, on both sides. After the resonator
+loop holds nothing above ~2.4 kHz. During overdub the live input is averaged and written once
+per low-rate buffer position. In playback and in overdub the loop replaces the live input,
+unless `looper_live_input` (shared, 0/1, configuration page or Loop Monitor; saved, off by
+default) is on: then the input is mixed in at -6 dB with the loop (in playback without being
+recorded), on both sides, so new overdub material is heard immediately. Before
+v4.30-duallooper.15 overdub always mixed the input in at -6 dB. After the resonator
 (`looper_post`, per side, 0/1, CC 88 or Loop Monitor; runtime only) the input is that side's
 output channel and always passes at unity, in every state.
 
@@ -161,7 +163,16 @@ after the resonator, the dry signal, pan and the loops, so it shapes everything 
 plays. It acts on the output channel (A left, B right), which is the side as long as pan
 keeps the sides apart (the default). The cutoff glides over ~30 ms and type changes
 crossfade over one block, so moving it does not click. `loop_status` reports it per side as
-`f` = [type, cutoff, resonance]; `hello` advertises `side_filter`.
+`f` = [type, cutoff, resonance, target]; `hello` advertises `side_filter`.
+
+`filter_target` (per side, CC 96, runtime only, 0 at power-on) chooses what the filter shapes:
+0 the whole side as above, 1 the loop's playback only. With 1 the loop engine hands its
+playback to the filter separately from the input it passes through, so the resonator, the dry
+signal and the live input (or overdub monitoring) stay unfiltered. With the loop after the
+resonator (`looper_post` 1) the filtered playback is mixed into the side's output; before it,
+the loop is filtered before it reaches the resonator, which then rings with the filtered loop.
+While the loop is empty, stopped or recording, the filter does nothing. `hello` advertises
+`filter_target` (v4.30-duallooper.15 and later); `f[3]` reports it.
 
 Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
@@ -191,7 +202,8 @@ live input during playback in v4.30-duallooper.9, the resonator modes in v4.30-d
 the loop position and gate mode in v4.30-duallooper.11, the playback window in
 v4.30-duallooper.12 (advertised as the `looper_window` capability; drag its edges on the
 waveform, double-click or Whole loop to reset), the side filter in v4.30-duallooper.13
-(Off/LP/HP/BP buttons, Cutoff and Res sliders under each side's header). Each side also has a
+(Off/LP/HP/BP buttons, Cutoff and Res sliders under each side's header; a Loop only toggle,
+`filter_target`, with the `filter_target` capability). Each side also has a
 Volume slider (`set_param` `volume`, as the panel knob, which takes over again when moved) and
 the loop Level becomes a slider (`looper_level`, with the `looper_level` capability).
 

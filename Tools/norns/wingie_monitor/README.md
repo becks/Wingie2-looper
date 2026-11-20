@@ -96,7 +96,8 @@ resonator, loop or both; needs v4.30-duallooper.14), pan, gate (off, hold, one-s
 trigger; off/hold only before v4.30-duallooper.14), start and end of the
 playback window (in seconds into the recording; 1/1000 of it per step, more when turned fast;
 the edges never cross), the side filter (type off/LP/HP/BP, cutoff in Hz, a semitone per
-step, and resonance; needs v4.30-duallooper.13), reverse (needs v4.30-duallooper.14), position
+step, and resonance; needs v4.30-duallooper.13), filter on (all, or loop: the filter shapes
+only the loop's playback; needs v4.30-duallooper.15), reverse (needs v4.30-duallooper.14), position
 (pre/post the resonator), and the shared live input, looper
 latch and line input mono/stereo. Line input
 mono/stereo is applied at once but kept over power-off only after a Save (configuration page,
@@ -115,7 +116,7 @@ the group is there next to any script's own params; with the script, in its PARA
 
 | Params | Per side (A and B) | Shared |
 |---|---|---|
-| Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance | pre clip gain, post clip gain, line in mono |
+| Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance, filter on | pre clip gain, post clip gain, line in mono |
 | Looper | speed, speed mode, sos, loop level, loop start, loop end, loop reverse, loop post, loop gate | live input, latch |
 | Buttons | rec / dub, stop / play, clear | |
 
@@ -125,7 +126,7 @@ then K2 to go back. K2 is what saves the mapping (to the script's `.pmap` file a
 the mod, to the mod's own file): leaving with K1 keeps it only until another script loads.
 The same page sets the range, accumulation and echo. Values are absolute 0–127 over the param's range, as for any norns mapping:
 
-- **mode**, **keys play**, **speed**, **filter**, **loop gate** (off, hold, one-shot, trigger)
+- **mode**, **keys play**, **speed**, **filter**, **filter on**, **loop gate** (off, hold, one-shot, trigger)
   and the other lists step through their choices along the knob's travel; **loop reverse**,
   **loop post**, **live input**, **latch** and **line in mono** are toggles (a button press switches them).
 - **rec / dub**, **stop / play** and **clear** are buttons, as K2 and K3 on the LOOP pages:

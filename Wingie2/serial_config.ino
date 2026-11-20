@@ -294,6 +294,14 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
       dsp.setSideFilter(ch, -1, -1, canonical);
       return true;
     }
+    // What the filter shapes, as MIDI CC 96: 0 the whole side, 1 the loop only. Runtime only.
+    if (strcmp(request.name, "filter_target") == 0) {
+      int target;
+      if (!quantizeIntegerParameter(request.value, 0, wingie_loop::kFilterTargetCount - 1, target)) return false;
+      dsp.setSideFilterTarget(ch, target);
+      canonical = target;
+      return true;
+    }
 
     // Looper sound on sound (as MIDI CC 83): runtime only, back to 80% at power-on.
     if (strcmp(request.name, "sos") == 0) {
@@ -647,6 +655,7 @@ void sendLoopStatus(uint32_t id) {
     side.filterType = view.filterType;
     side.filterCutoff = view.filterCutoff;
     side.filterResonance = view.filterResonance;
+    side.filterTarget = view.filterTarget;
     const wingie_loop::NoteLoop &notes = noteLoop[ch];
     side.notesState = notes.state();
     side.noteCount = notes.count();

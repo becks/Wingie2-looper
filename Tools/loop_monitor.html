@@ -156,7 +156,7 @@
     canvas.roll { height: 150px; }
 
     .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); }
-    .stats b { color: var(--text); font-weight: 600; }
+    .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
     /* A value the player just changed stays red briefly, then fades back. */
     .meta b, .stats b { transition: color 700ms ease-out; }
     .meta b.changed, .stats b.changed { color: var(--rec); transition: none; }
@@ -229,7 +229,7 @@
       <h1>Wingie2 Loop Monitor</h1>
       <span class="meta">Line input <b id="mono">–</b></span>
       <label class="meta control" id="latch-meta" hidden title="Tap both Mode buttons to lock or unlock the looper layer instead of holding them. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s (holding B+B at power-on toggles and saves it)."><input type="checkbox" id="latch-check"> Looper latch <b id="latch">–</b></label>
-      <label class="meta control" id="live-wrap" hidden title="Both sides: hear the live input at -6 dB while a loop plays (otherwise the loop replaces it). Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s."><input type="checkbox" id="live"> Live input in playback</label>
+      <label class="meta control" id="live-wrap" hidden title="Both sides: hear the live input at -6 dB while a loop plays or overdubs (otherwise the loop replaces it). Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s."><input type="checkbox" id="live"> Live input in playback</label>
       <div class="connection">
         <span class="dot" id="dot"></span>
         <span id="status">Disconnected</span>
@@ -313,11 +313,12 @@
         <label class="meta control" data-pan-wrap hidden title="Stereo pan after the resonator. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s.">Pan <input type="range" min="0" max="1" step="0.01" data-pan aria-label="Pan"> <b data-pan-value>–</b></label>
         <label class="meta control" data-volume-wrap hidden title="This side's volume, as the panel's Volume knob. Moving the knob takes over again. Changes the running state; save it from the configuration page or by holding both Mode buttons for 3 s.">Volume <input type="range" min="0" max="100" step="1" data-volume aria-label="Volume"> <b data-volume-value>–</b></label>
       </div>
-      <div class="filter-row" data-filter-wrap hidden title="Filter on this side's output: resonator, dry signal and loops (MIDI CC 92 type, 93 cutoff, 94 resonance). It acts on the output channel, which is this side with the default pan. Off at power-on.">
+      <div class="filter-row" data-filter-wrap hidden title="Filter on this side's output: resonator, dry signal and loops, or with Loop only just the loop (MIDI CC 92 type, 93 cutoff, 94 resonance, 96 loop only). It acts on the output channel, which is this side with the default pan. Off at power-on.">
         <span class="meta">Filter</span>
         <div class="speed-steps" data-filter-types role="group" aria-label="Filter type"></div>
         <label class="meta control" data-filter-cutoff-wrap hidden>Cutoff <input type="range" min="0" max="1000" step="1" data-filter-cutoff aria-label="Filter cutoff"> <b data-filter-cutoff-value>–</b></label>
         <label class="meta control" data-filter-resonance-wrap hidden>Res <input type="range" min="0" max="100" step="1" data-filter-resonance aria-label="Filter resonance"> <b data-filter-resonance-value>–</b></label>
+        <div class="speed-steps" data-filter-target-wrap hidden><button type="button" data-filter-target aria-pressed="false" title="Filter only the loop's playback; the resonator and the live input stay unfiltered. With the loop before the resonator (Pre) the loop is filtered before it reaches the resonator. MIDI CC 96. Off at power-on.">Loop only</button></div>
       </div>
       <section>
         <h3>Audio loop <span class="badge empty" data-audio-state>EMPTY</span></h3>
@@ -326,10 +327,12 @@
           <span>Length <b data-audio-length>–</b></span>
           <span>Position <b data-audio-position>–</b></span>
           <span>Speed <b data-speed>–</b></span>
-          <span data-level-text>Level <b data-level>–</b></span>
-          <label class="control" data-loop-level-wrap hidden title="Loop level (MIDI CC 82; panel: G#/A# among the looper keys). Back to 100% at power-on.">Level <input type="range" min="0" max="100" step="1" data-loop-level aria-label="Loop level"> <b data-loop-level-value>–</b></label>
           <span>Direction <b data-direction>–</b></span>
           <span data-window-wrap hidden title="Playback window: drag its edges on the waveform (MIDI CC 90/91). A new recording or clear plays the whole loop again; runtime only.">Window <b data-window>–</b> <button type="button" data-window-reset>Whole loop</button></span>
+        </div>
+        <div class="stats">
+          <span data-level-text>Level <b data-level>–</b></span>
+          <label class="control" data-loop-level-wrap hidden title="Loop level (MIDI CC 82; panel: G#/A# among the looper keys). Back to 100% at power-on.">Level <input type="range" min="0" max="100" step="1" data-loop-level aria-label="Loop level"> <b data-loop-level-value>–</b></label>
           <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
         <div class="speed-steps" data-speed-steps hidden role="group" aria-label="Speed steps" title="Speed in pure-ratio steps (MIDI CC 86). Speed also changes pitch and loop duration."></div>
@@ -483,6 +486,8 @@
                  filter_cutoff: {holdUntil: 0, wanted: null, busy: false}, filter_resonance: {holdUntil: 0, wanted: null, busy: false},
                  volume: {holdUntil: 0, wanted: null, busy: false}, looper_level: {holdUntil: 0, wanted: null, busy: false}},
       filterHoldUntil: 0,
+      filterTargetWanted: 0,
+      filterTargetHoldUntil: 0,
       // Window as last set from this page, shown while the device catches up.
       window: {start: 0, end: 1, holdUntil: 0, drag: null},
       modeHoldUntil: 0,
@@ -572,6 +577,10 @@
         button.addEventListener("click", () => sendFilterType(side, index));
         ui.filterTypes.appendChild(button);
         return button;
+      });
+      ui.filterTarget.addEventListener("click", () => {
+        const on = ui.filterTarget.getAttribute("aria-pressed") === "true";
+        sendFilterTarget(side, on ? 0 : 1);
       });
       ui.routingButtons = ROUTING.map((toggle) => {
         const button = document.createElement("button");
@@ -733,6 +742,19 @@
         setMessage("Filter not applied: " + error.message, true);
       } finally {
         side.filterHoldUntil = performance.now() + CONTROL_HOLD_MS;
+      }
+    }
+
+    async function sendFilterTarget(side, target) {
+      if (!transport.connected) return;
+      side.filterTargetWanted = target;
+      side.filterTargetHoldUntil = performance.now() + CONTROL_HOLD_MS;
+      try {
+        await request("set_param", {target: side.name, name: "filter_target", value: target});
+      } catch (error) {
+        setMessage("Filter target not applied: " + error.message, true);
+      } finally {
+        side.filterTargetHoldUntil = performance.now() + CONTROL_HOLD_MS;
       }
     }
 
@@ -1063,7 +1085,8 @@
                     start: raw.a.length > 12 ? raw.a[11] : 0, end: raw.a.length > 12 ? raw.a[12] : 1},
             notes: {state: raw.n[0], count: raw.n[1], lengthMs: raw.n[2], positionMs: raw.n[3], revision: raw.n[4]},
             mode: raw.m, octave: raw.o, note: raw.p, keys: raw.k, sliders: raw.x || [], keyTarget: raw.kt,
-            filter: raw.f ? {type: raw.f[0], cutoff: raw.f[1], resonance: raw.f[2]} : null,
+            filter: raw.f ? {type: raw.f[0], cutoff: raw.f[1], resonance: raw.f[2],
+                             target: raw.f.length > 3 ? raw.f[3] : null} : null,
           };
           side.statusAt = now;
           refreshWave(side, now);
@@ -1347,6 +1370,12 @@
           ui.filterButtons.forEach((button, index) => button.setAttribute("aria-pressed", String(index === type)));
           renderControl(side, "filter_cutoff", filter.cutoff, now);
           renderControl(side, "filter_resonance", filter.resonance, now);
+          // Loop only (filter_target), on firmware that reports it.
+          ui.filterTargetWrap.hidden = filter.target === null;
+          if (filter.target !== null) {
+            const target = now <= side.filterTargetHoldUntil ? side.filterTargetWanted : filter.target;
+            ui.filterTarget.setAttribute("aria-pressed", String(target === 1));
+          }
         }
         ui.windowWrap.hidden = !windowSupported;
         if (windowSupported) {
