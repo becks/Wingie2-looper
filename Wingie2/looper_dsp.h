@@ -4,6 +4,7 @@
 #include "level_meter.h"
 #include "speed_steps.h"
 #include "side_filter.h"
+#include "mono_bass.h"
 #include <atomic>
 #include <Arduino.h>
 #include "esp_heap_caps.h"
@@ -46,6 +47,9 @@ class LooperDSP : public decorator_dsp {
   // (filtered before the resonator when the loop is pre, after it when post).
   std::atomic<int> filterTarget_[2] {{wingie_loop::kFilterAll}, {wingie_loop::kFilterAll}};
   float wet_[64] = {};
+  // Mono bass on the final output (Hz, 0 off), after the side filters.
+  wingie_master::MonoBass monoBass_;
+  std::atomic<int> monoBassHz_ {0};
   float feedback_[2][64] = {};
   wingie_loop::LevelMeter meter_;
   static constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -185,6 +189,11 @@ public:
   }
   // Both sides: keep the live input audible (-6 dB) while a loop plays.
   void setLiveInput(bool on) { liveInput_.store(on); }
+  void setMonoBass(int hz) {
+    wingie_master::Settings s;
+    s.monoBass = hz;
+    monoBassHz_.store(wingie_master::sanitize(s).monoBass);
+  }
   void setPost(int ch, bool on) { if (ch >= 0 && ch < 2) post_[ch].store(on); }
   void setGateMode(int ch, int mode) {
     if (ch >= 0 && ch < 2 && mode >= wingie_loop::kGateOff && mode < wingie_loop::kGateModeCount)
@@ -300,9 +309,10 @@ private:
     filter_[ch].process(io, n, filterType_[ch].load(), filterCutoff_[ch].load(),
                         filterResonance_[ch].load(), rate > 0 ? rate : 44100.0f);
   }
-  // Resonators and loops, then the side filters last so they shape the whole side:
-  // resonator, dry signal and loops (included in the profile's total). A side whose
-  // filter is on the loop only filters inside processLoop instead.
+  // Resonators and loops, then the side filters so they shape the whole side:
+  // resonator, dry signal and loops (a side whose filter is on the loop only filters
+  // inside processLoop instead); mono bass last, on the final stereo output (all
+  // included in the profile's total).
   void computeBlock(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
     bool filterLoop[2];
     for (int ch = 0; ch < 2; ++ch)
@@ -310,6 +320,8 @@ private:
     computeLoops(count, inputs, outputs, filterLoop);
     for (int ch = 0; ch < 2; ++ch)
       if (!filterLoop[ch]) runFilter(ch, outputs[ch], count);
+    const float rate = (float)getSampleRate();
+    monoBass_.process(outputs[0], outputs[1], count, monoBassHz_.load(), rate > 0 ? rate : 44100.0f);
   }
   void computeLoops(int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs, const bool* filterLoop) {
     float speed[2], level[2], retention[2], cross[2];

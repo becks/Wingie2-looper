@@ -189,6 +189,10 @@ bool looperLatchFlashOn = false;
 unsigned long looperLatchFlashTimer = 0;
 // Live input mixed in at -6 dB while a loop plays (otherwise the loop replaces it).
 bool looper_live_input = false;
+// Master low cut and compressor in the codec (master_dynamics.h). Set from serial
+// (loop task); the control task writes them to the AC101 when pending.
+wingie_master::Settings masterDynamics;
+volatile bool masterDynamicsPending = false;
 // Modes the Mode button steps through (bit n = mode n); every mode by default.
 volatile uint32_t mode_cycle = wingie_modes::kDefaultCycleMask;
 uint8_t looperLevel[2] = {127, 127};
@@ -555,6 +559,15 @@ void persist_bool_setting_now(const char *key, bool value, int dirtyIndex) {
 
 void persist_line_input_mono_now() {
   persist_bool_setting_now("line_input_mono", line_input_mono, kDirtyLineInputMono);
+}
+
+void apply_master_dynamics() {
+  const wingie_master::Settings settings = wingie_master::sanitize(masterDynamics);
+  dsp.setMonoBass(settings.monoBass);
+  const esp_err_t res = ac.SetMasterDynamics(settings);
+  Serial.printf("master dynamics: low cut %d Hz, comp %d dB %d:1 +%d dB %d/%d ms, mono bass %d Hz (%s)\n",
+                settings.lowCut, settings.threshold, settings.ratio, settings.makeup, settings.attack,
+                settings.release, settings.monoBass, res == ESP_OK ? "ok" : "i2c error");
 }
 
 void apply_looper_live_input() {

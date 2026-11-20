@@ -14399,6 +14399,10 @@ void Wingie2::setLooperLiveInput(bool on) {
     static_cast<LooperDSP*>(fDSP)->setLiveInput(on);
 }
 
+void Wingie2::setMonoBass(int hz) {
+    static_cast<LooperDSP*>(fDSP)->setMonoBass(hz);
+}
+
 void Wingie2::setLooperPost(int ch, bool on) {
     static_cast<LooperDSP*>(fDSP)->setPost(ch, on);
 }

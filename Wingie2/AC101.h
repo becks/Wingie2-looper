@@ -30,6 +30,8 @@
 #include "esp_types.h"
 #include "esp_err.h"
 
+#include "master_dynamics.h"
+
 #define AC101_TAG  "AC101"
 
 // I2C 
@@ -314,6 +316,11 @@ public:
 	// printRead
 	// print out the contents of any ac101 register. Used for debugging
     void printRead(uint8_t reg);
+
+	// Read-modify-write of the bits in mask.
+	esp_err_t UpdateBits(uint8_t reg, uint16_t mask, uint16_t value);
+	// Writes the master low cut and compressor (master_dynamics.h) to the DAC's DAP.
+	esp_err_t SetMasterDynamics(const wingie_master::Settings& settings);
 
 protected:
 

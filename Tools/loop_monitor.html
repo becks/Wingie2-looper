@@ -166,6 +166,9 @@
     .top { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
     @media (max-width: 820px) { .top { grid-template-columns: 1fr; } }
     #knobs { align-content: start; }
+    #master .slider input { width: 100%; margin: 0; }
+    #master .fill.gr { background: var(--muted); transition: none; }
+    #master .fill.gr.on { background: var(--rec); }
     #knobs hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
     .segments { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; height: 8px; }
     .segments i { background: #0c0d10; border: 1px solid var(--line); border-radius: 2px; }
@@ -247,6 +250,9 @@
       <div class="slider" title="Sequencer threshold, right"><span>Thresh R</span><div class="segments" id="step-threshold-right"></div><b id="value-threshold-right">–</b></div>
       <div class="slider" title="Pre clip gain"><span>Pre gain</span><div class="segments" id="step-pre-gain"></div><b id="value-pre-gain">–</b></div>
       <div class="slider" title="Post clip gain"><span>Post gain</span><div class="segments" id="step-post-gain"></div><b id="value-post-gain">–</b></div>
+      <div id="master" class="sliders" hidden title="Master low cut and compressor, computed by the codec on both outputs (no CPU cost), and mono bass. Runtime only for now: back to off at power-on.">
+        <hr>
+      </div>
     </section>
     <section class="side" id="io">
       <div class="io-grid">
@@ -1068,12 +1074,14 @@
         lineMono = status.mono;
         looperLatch = status.latch;
         looperLiveInput = status.live;
+        masterStatus = Array.isArray(status.md) ? status.md : undefined;
         if (status.lv) {
           io.monoActive = !!status.mono_active;
           io.source = status.src || "";
           status.lv.forEach((hex, channel) => {
             for (let i = 0; i + 1 < hex.length; i += 2) io.queue[channel].push(parseInt(hex.substr(i, 2), 16));
           });
+          if (status.lv.length === 4) estimateReduction(status.lv[2], status.lv[3]);
         }
         if (status.t && status.g) steps = [status.t[0], status.t[1], status.g[0], status.g[1]];
         status.sides.forEach((raw, index) => {
@@ -1603,7 +1611,120 @@
       drawStrip(io.strips[3], io.history[3], now, 3);
     }
 
+    // Master low cut and compressor (shared set_param, loop_status md), codec side.
+    const MASTER = [
+      {name: "master_low_cut", label: "Low cut", min: 0, max: 1000, step: 5,
+       show: (v) => v <= 0 ? "Off" : v + " Hz"},
+      {name: "comp_threshold", label: "Comp thr", min: -40, max: 0, step: 1, show: (v) => v + " dB"},
+      {name: "comp_ratio", label: "Ratio", min: 1, max: 20, step: 1, show: (v) => v <= 1 ? "Off" : v + ":1"},
+      {name: "comp_makeup", label: "Makeup", min: 0, max: 12, step: 1, show: (v) => "+" + v + " dB"},
+      {name: "comp_attack", label: "Attack", min: 1, max: 200, step: 1, show: (v) => v + " ms"},
+      {name: "comp_release", label: "Release", min: 10, max: 2000, step: 10, show: (v) => v + " ms"},
+      // md[6]; under 40 Hz is off (the firmware turns 1-39 into 40).
+      {name: "mono_bass", label: "Mono bass", min: 30, max: 300, step: 5, off: 30,
+       title: "Below this frequency left and right are summed to the centre; above it the stereo image is kept " +
+              "(12 dB/octave, computed by the ESP32 on the final output). Off at the far left.",
+       show: (v) => v <= 0 ? "Off" : v + " Hz"},
+    ];
+    const masterWrap = document.getElementById("master");
+    let masterStatus;  // loop_status md; undefined on older firmware
+    for (const control of MASTER) {
+      const row = document.createElement("label");
+      row.className = "slider";
+      row.innerHTML = "<span></span><input type=\"range\"><b>–</b>";
+      row.querySelector("span").textContent = control.label;
+      if (control.title) row.title = control.title;
+      control.row = row;
+      const input = row.querySelector("input");
+      Object.assign(input, {min: control.min, max: control.max, step: control.step});
+      input.setAttribute("aria-label", control.label);
+      control.input = input;
+      control.value = row.querySelector("b");
+      control.holdUntil = 0;
+      control.wanted = null;
+      control.busy = false;
+      input.addEventListener("input", () => {
+        control.wanted = Number(input.value);
+        if (control.off !== undefined && control.wanted <= control.off) control.wanted = 0;
+        control.value.textContent = control.show(control.wanted);
+        control.holdUntil = performance.now() + CONTROL_HOLD_MS;
+        sendMaster(control);
+      });
+      masterWrap.appendChild(row);
+    }
+    // One request at a time per control; the latest value wins.
+    async function sendMaster(control) {
+      if (!transport.connected || control.busy) return;
+      control.busy = true;
+      try {
+        while (control.wanted !== null) {
+          const value = control.wanted;
+          control.wanted = null;
+          await request("set_param", {target: "shared", name: control.name, value});
+        }
+      } catch (error) {
+        setMessage(control.label + " not applied: " + error.message, true);
+      } finally {
+        control.busy = false;
+        control.holdUntil = performance.now() + CONTROL_HOLD_MS;
+      }
+    }
+    // Gain reduction of the codec compressor. The codec has no register to read it
+    // back, so it is estimated here from the output peaks (one entry per ~11.6 ms)
+    // with the same threshold, ratio, attack and release: RMS taken as peak - 3 dB.
+    const ENTRY_MS = 8 * 64 / 44.1;
+    const reduction = {db: [0, 0], shown: 0, peak: 0, peakAt: 0};
+    const grRow = document.createElement("div");
+    grRow.className = "slider";
+    grRow.title = "Estimated gain reduction of the compressor (the codec cannot report it): " +
+      "computed from the output levels with the same settings, so it follows the real one closely but not exactly.";
+    grRow.innerHTML = "<span>Comp GR</span><div class=\"track\"><div class=\"fill gr\"></div></div><b>–</b>";
+    const grFill = grRow.querySelector(".fill");
+    const grValue = grRow.querySelector("b");
+    masterWrap.appendChild(grRow);
+    function estimateReduction(left, right) {
+      if (!masterStatus) return;
+      const [, threshold, ratio, , attack, release] = masterStatus;
+      const slope = ratio > 1 ? 1 - 1 / ratio : 0;
+      const up = 1 - Math.exp(-2.2 * ENTRY_MS / Math.max(attack, 1));
+      const down = 1 - Math.exp(-2.2 * ENTRY_MS / Math.max(release, 1));
+      [left, right].forEach((hex, channel) => {
+        let gr = reduction.db[channel];
+        for (let i = 0; i + 1 < hex.length; i += 2) {
+          const code = parseInt(hex.substr(i, 2), 16);
+          const peakDb = code >= 255 ? 0 : code / 4 - 60;
+          const target = slope ? Math.max(0, (peakDb - 3 - threshold) * slope) : 0;
+          gr += (target - gr) * (target > gr ? up : down);
+        }
+        reduction.db[channel] = gr;
+      });
+    }
+    function renderReduction(now) {
+      const active = masterStatus && masterStatus[2] > 1;
+      grRow.hidden = !active;
+      if (!active) return;
+      const gr = Math.max(reduction.db[0], reduction.db[1]);
+      if (gr >= reduction.peak || now - reduction.peakAt > 1000) { reduction.peak = gr; reduction.peakAt = now; }
+      grFill.style.width = Math.min(100, gr / 20 * 100) + "%";
+      grFill.classList.toggle("on", gr > 0.5);
+      grValue.textContent = gr < 0.05 ? "0 dB" : "−" + gr.toFixed(1) + " dB (" + reduction.peak.toFixed(1) + ")";
+    }
+    function renderMaster(now) {
+      masterWrap.hidden = !masterStatus;
+      if (!masterStatus) return;
+      renderReduction(now);
+      MASTER.forEach((control, index) => {
+        const value = masterStatus[index];
+        control.row.hidden = value === undefined;  // mono bass needs a newer firmware
+        if (value === undefined || control.busy || now <= control.holdUntil) return;
+        const position = control.off !== undefined && value <= 0 ? control.off : value;
+        if (Number(control.input.value) !== position) control.input.value = position;
+        setValue(control.value, control.show(value), now);
+      });
+    }
+
     function frame(now) {
+      renderMaster(now);
       renderIo(now);
       renderSteps(now);
       if (lineMono !== undefined) setValue(monoElement, lineMono ? "Mono" : "Stereo", now);

@@ -480,6 +480,37 @@ bool applyScalarParameter(const wingie_serial::Request &request, float &canonica
     canonical = mode_cycle;
     return true;
   }
+  // Master low cut (Hz, 0 off) and compressor (threshold dBFS, ratio n:1 with 1 off,
+  // makeup dB) in the AC101 codec, mono bass (Hz, 0 off) in the DSP; applied by the
+  // control task. Runtime only.
+  {
+    int *field = nullptr;
+    int lo = 0, hi = 0;
+    if (strcmp(request.name, "master_low_cut") == 0) {
+      field = &masterDynamics.lowCut; lo = 0; hi = wingie_master::kLowCutMax;
+    } else if (strcmp(request.name, "comp_threshold") == 0) {
+      field = &masterDynamics.threshold; lo = wingie_master::kThresholdMin; hi = wingie_master::kThresholdMax;
+    } else if (strcmp(request.name, "comp_ratio") == 0) {
+      field = &masterDynamics.ratio; lo = wingie_master::kRatioMin; hi = wingie_master::kRatioMax;
+    } else if (strcmp(request.name, "comp_makeup") == 0) {
+      field = &masterDynamics.makeup; lo = wingie_master::kMakeupMin; hi = wingie_master::kMakeupMax;
+    } else if (strcmp(request.name, "comp_attack") == 0) {
+      field = &masterDynamics.attack; lo = wingie_master::kAttackMin; hi = wingie_master::kAttackMax;
+    } else if (strcmp(request.name, "comp_release") == 0) {
+      field = &masterDynamics.release; lo = wingie_master::kReleaseMin; hi = wingie_master::kReleaseMax;
+    } else if (strcmp(request.name, "mono_bass") == 0) {
+      field = &masterDynamics.monoBass; lo = 0; hi = wingie_master::kMonoBassMax;
+    }
+    if (field) {
+      int value;
+      if (!quantizeIntegerParameter(request.value, lo, hi, value)) return false;
+      *field = value;
+      masterDynamics = wingie_master::sanitize(masterDynamics);
+      masterDynamicsPending = true;
+      canonical = *field;
+      return true;
+    }
+  }
   if (strcmp(request.name, "looper_live_input") == 0) {
     int enabled = wingie_config::kLooperLiveInputMin;
     if (!quantizeIntegerParameter(request.value, wingie_config::kLooperLiveInputMin,
@@ -623,6 +654,7 @@ void sendLoopStatus(uint32_t id) {
   snapshot.lineInputMono = line_input_mono;
   snapshot.looperLatch = looper_latch ? (looperLatched ? 2 : 1) : 0;
   snapshot.looperLiveInput = looper_live_input;
+  snapshot.master = masterDynamics;
   snapshot.threshold[0] = left_thresh;
   snapshot.threshold[1] = right_thresh;
   snapshot.preClipGain = pre_clip_gain;

@@ -99,7 +99,10 @@ the edges never cross), the side filter (type off/LP/HP/BP, cutoff in Hz, a semi
 step, and resonance; needs v4.30-duallooper.13), filter on (all, or loop: the filter shapes
 only the loop's playback; needs v4.30-duallooper.15), reverse (needs v4.30-duallooper.14), position
 (pre/post the resonator), and the shared live input, looper
-latch and line input mono/stereo. Line input
+latch and line input mono/stereo, and the master low cut and compressor (low cut off or
+20–1000 Hz, threshold, ratio, makeup, attack, release; computed by the codec on the whole
+output; runtime only; needs firmware with `master_dynamics`) and mono bass (off or 40–300 Hz:
+below it left and right are summed to the centre; runtime only). Line input
 mono/stereo is applied at once but kept over power-off only after a Save (configuration page,
 or both Mode buttons held for 3 s); the other rows behave like their MIDI CCs (runtime only,
 except the latch and live input, saved like the other settings). A value just sent is shown
@@ -116,7 +119,7 @@ the group is there next to any script's own params; with the script, in its PARA
 
 | Params | Per side (A and B) | Shared |
 |---|---|---|
-| Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance, filter on | pre clip gain, post clip gain, line in mono |
+| Sound | mode, keys play, volume, mix, decay, threshold, pan, filter, cutoff, resonance, filter on | pre clip gain, post clip gain, line in mono, master low cut, comp threshold, comp ratio, comp makeup, comp attack, comp release, mono bass |
 | Looper | speed, speed mode, sos, loop level, loop start, loop end, loop reverse, loop post, loop gate | live input, latch |
 | Buttons | rec / dub, stop / play, clear | |
 

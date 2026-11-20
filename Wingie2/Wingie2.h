@@ -70,6 +70,7 @@ class Wingie2
         void setLooperKeySpeed(int ch, float value);
         void setLooperSpeedMode(int ch, int mode);
         void setLooperLiveInput(bool on);
+        void setMonoBass(int hz);
         void setLooperPost(int ch, bool on);
         void setLooperGateMode(int ch, int mode);
         void setLooperWindow(int ch, int edge, float value);
