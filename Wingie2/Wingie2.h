@@ -74,6 +74,7 @@ class Wingie2
         void setLooperGateMode(int ch, int mode);
         void setLooperWindow(int ch, int edge, float value);
         void setSideFilter(int ch, int type, float cutoff, float resonance);
+        void setSideFilterTarget(int ch, int target);
         void looperGateNote(int ch, uint8_t source, bool on);
         bool takeLooperFilled(int ch);
         bool takeLooperWrapped(int ch);

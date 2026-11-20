@@ -17,7 +17,7 @@ static void testHello() {
   checkResponse(response,
       "{\"v\":1,\"id\":1,\"ok\":true,\"op\":\"hello\",\"device\":\"Wingie2\","
       "\"firmware\":\"dev\","
-      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\",\"looper_reverse\"],"
+      "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\",\"looper_reverse\",\"filter_target\"],"
       "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":1024}}");
 
   JsonResponse longFirmware;
@@ -311,15 +311,15 @@ static void testLoopMonitor() {
   status.levels[2][0] = 0xff; status.levels[2][1] = 0x10;
   status.levels[3][0] = 0x0a; status.levels[3][1] = 0xab;
   status.side[0] = {2, 86016, 4321, 86016, 1.0f, 0.5f, true, 0.8f, 2, 2, 11, 17480, 250, 7, 1, -1, 48, 0x011,
-                    0.25f, 4.5f, 0.8f, 0.5f, true, false, 0.125f, 0.75f, 2, 1234.4f, 0.35f, 1};
+                    0.25f, 4.5f, 0.8f, 0.5f, true, false, 0.125f, 0.75f, 2, 1234.4f, 0.35f, 1, 1};
   status.side[1].speed = 2.0f;
   JsonResponse statusResponse;
   encodeLoopStatus(statusResponse, 5, status);
   checkResponse(statusResponse,
       "{\"v\":1,\"id\":5,\"ok\":true,\"op\":\"loop_status\",\"ms\":1234,\"fps\":4900,\"mono\":1,\"latch\":2,\"live\":1,"
       "\"t\":[0.0825,0.9900],\"g\":[0.2475,0.8250],\"sides\":["
-      "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800,2,1,0,0.1250,0.7500],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500],\"f\":[2,1234,0.35],\"kt\":1},"
-      "{\"a\":[0,0,0,0,2.000,0.000,0,0.000,0,0,0,0.0000,0.0000],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000],\"f\":[0,0,0.00],\"kt\":0}],"
+      "{\"a\":[2,86016,4321,86016,1.000,0.500,1,0.800,2,1,0,0.1250,0.7500],\"n\":[2,11,17480,250,7],\"m\":1,\"o\":-1,\"p\":48,\"k\":17,\"x\":[0.250,4.500,0.800,0.500],\"f\":[2,1234,0.35,1],\"kt\":1},"
+      "{\"a\":[0,0,0,0,2.000,0.000,0,0.000,0,0,0,0.0000,0.0000],\"n\":[0,0,0,0,0],\"m\":0,\"o\":0,\"p\":0,\"k\":0,\"x\":[0.000,0.000,0.000,0.000],\"f\":[0,0,0.00,0],\"kt\":0}],"
       "\"mono_active\":1,\"src\":\"line\",\"lv\":[\"00f0\",\"0102\",\"ff10\",\"0aab\"]}");
 
   // Worst case status fits a frame.

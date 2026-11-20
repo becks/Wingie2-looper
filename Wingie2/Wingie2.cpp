@@ -14419,6 +14419,10 @@ void Wingie2::setSideFilter(int ch, int type, float cutoff, float resonance) {
     if (resonance >= 0) looper->setFilterResonance(ch, resonance);
 }
 
+void Wingie2::setSideFilterTarget(int ch, int target) {
+    static_cast<LooperDSP*>(fDSP)->setFilterTarget(ch, target);
+}
+
 void Wingie2::looperGateNote(int ch, uint8_t source, bool on) {
     static_cast<LooperDSP*>(fDSP)->gateNote(ch, source, on);
 }
