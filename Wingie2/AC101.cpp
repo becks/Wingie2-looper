@@ -367,3 +367,34 @@ esp_err_t AC101::ReadReg_Full(uint8_t reg, uint8_t* data_rd, size_t size)
     i2c_cmd_link_delete(cmd);
     return ret;
 }
+
+esp_err_t AC101::UpdateBits(uint8_t reg, uint16_t mask, uint16_t value)
+{
+    const uint16_t current = ReadReg(reg);
+    return WriteReg(reg, (current & ~mask) | (value & mask));
+}
+
+// The DAP block (high pass and DRC) needs its module clock and reset released
+// (bit 6 of regs 04h/05h), then the coefficients, then the enables; turning
+// everything off stops its clock again, as the AC101 Linux driver does.
+esp_err_t AC101::SetMasterDynamics(const wingie_master::Settings& settings)
+{
+    const uint16_t control = wingie_master::controlValue(settings);
+    const uint16_t bit = wingie_master::kDapModuleBit;
+    esp_err_t res = ESP_OK;
+    if (!control) {
+        res |= WriteReg(AC_DAC_DAPCTRL, 0);
+        res |= WriteReg(DAC_DAP_ENA, 0);
+        res |= UpdateBits(MOD_RST_CTRL, bit, 0);
+        res |= UpdateBits(MOD_CLK_ENA, bit, 0);
+        return res;
+    }
+    res |= UpdateBits(MOD_CLK_ENA, bit, bit);
+    res |= UpdateBits(MOD_RST_CTRL, bit, bit);
+    wingie_master::RegisterWrite writes[wingie_master::kCoefficientWrites];
+    wingie_master::coefficientWrites(settings, writes);
+    for (const wingie_master::RegisterWrite& w : writes) res |= WriteReg(w.reg, w.value);
+    res |= WriteReg(DAC_DAP_ENA, wingie_master::enableValue(settings));
+    res |= WriteReg(AC_DAC_DAPCTRL, control);
+    return res;
+}

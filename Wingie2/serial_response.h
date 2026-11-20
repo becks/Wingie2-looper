@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "config_profiles.h"
+#include "master_dynamics.h"
 #include "serial_config_protocol.h"
 
 namespace wingie_serial {
@@ -140,6 +141,7 @@ struct LoopStatusSnapshot {
   bool lineInputMono;  // toggled by holding both C keys at boot
   int looperLatch;     // 0 off, 1 on, 2 on with the looper layer locked
   bool looperLiveInput;  // live input audible while a loop plays
+  wingie_master::Settings master;  // codec low cut and compressor
   float threshold[2];  // sequencer threshold per side
   float preClipGain;
   float postClipGain;
@@ -240,7 +242,7 @@ inline void encodeHello(JsonResponse &response, uint32_t id, const char *firmwar
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"hello\","
                   "\"device\":\"Wingie2\","
                   "\"firmware\":\"%s\","
-                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\",\"looper_reverse\",\"filter_target\"],"
+                  "\"capabilities\":[\"settings\",\"ratio_mode\",\"cave_config\",\"mpe\",\"speed_steps\",\"speed_modes\",\"resonator_modes\",\"looper_routing\",\"looper_state\",\"looper_level\",\"looper_window\",\"side_filter\",\"key_target\",\"gate_modes\",\"looper_reverse\",\"filter_target\",\"master_dynamics\"],"
                   "\"config_schema\":6,\"transport\":{\"baud\":115200,\"max_frame\":%u}}",
                   static_cast<unsigned long>(id), firmware,
                   static_cast<unsigned>(kMaxFrameBytes));
@@ -358,6 +360,7 @@ inline void encodeControlCounts(JsonResponse &response, uint32_t id,
 // x: [mix, decay, volume] as the DSP currently has them, then the side's pan
 // f: side output filter [type, cutoff Hz, resonance, target (0 all, 1 loop only)]
 // kt: what the note keys play (0 resonator, 1 loop, 2 both)
+// md: master low cut Hz (0 off), compressor threshold dB, ratio (1 off), makeup dB, attack ms, release ms
 // lv: input L, input R, output L, output R peak entries since the last frame, hex
 inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStatusSnapshot &snapshot) {
   response.append("{\"v\":1,\"id\":%lu,\"ok\":true,\"op\":\"loop_status\","
@@ -382,7 +385,9 @@ inline void encodeLoopStatus(JsonResponse &response, uint32_t id, const LoopStat
                     static_cast<unsigned>(side.keys), side.mix, side.decay, side.volume, side.pan,
                     side.filterType, side.filterCutoff, side.filterResonance, side.filterTarget, side.keyTarget);
   }
-  response.append("],\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
+  response.append("],\"md\":[%d,%d,%d,%d,%d,%d]", snapshot.master.lowCut, snapshot.master.threshold,
+                  snapshot.master.ratio, snapshot.master.makeup, snapshot.master.attack, snapshot.master.release);
+  response.append(",\"mono_active\":%d,\"src\":\"%s\",\"lv\":[",
                   snapshot.lineMonoActive ? 1 : 0, snapshot.sourceLine ? "line" : "mic");
   static const char kHex[] = "0123456789abcdef";
   for (int ch = 0; ch < 4; ch++) {

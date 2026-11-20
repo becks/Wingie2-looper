@@ -174,6 +174,23 @@ the loop is filtered before it reaches the resonator, which then rings with the 
 While the loop is empty, stopped or recording, the filter does nothing. `hello` advertises
 `filter_target` (v4.30-duallooper.15 and later); `f[3]` reports it.
 
+### Master low cut and compressor (codec)
+
+The AC101 codec has a digital processing block on its DAC path (user manual v1.1, 11.14): a
+first-order high pass and a dynamic range controller (DRC) on both output channels. They work
+on the final output (resonators, dry signal, loops, pan, side filters), after everything the
+ESP32 computes, so they cost no audio time. Shared `set_param` names (runtime only, off at
+power-on): `master_low_cut` (0 off, else 20–1000 Hz, -3 dB point, 6 dB/octave),
+`comp_threshold` (−40–0 dBFS of the 10 ms RMS), `comp_ratio` (1 off, 2–20 for n:1),
+`comp_makeup` (0–12 dB, the DRC's static-curve offset), `comp_attack` (1–200 ms, gain going
+down) and `comp_release` (10–2000 ms). `loop_status` reports them as `md` = [low cut,
+threshold, ratio, makeup, attack, release]; `hello` advertises `master_dynamics`. The control
+task writes them to the codec over I2C (coefficients in `Wingie2/master_dynamics.h`, checked
+against the manual's examples in `tests/host/master_dynamics_test.cpp`). The codec cannot
+report the DRC's gain, so the Loop Monitor's Comp GR row estimates it from the output levels
+with the same settings. The Loop Monitor's output meters read the signal before the codec, so
+they do not show the low cut or the compression.
+
 Limitations: continuous speed (beyond the panel, Loop Monitor and norns steps) and
 cross-feedback still require MIDI (SOS can also be set from the Loop Monitor, and loop level
 over serial with `looper_level`, as the norns script does); there is no MIDI clock

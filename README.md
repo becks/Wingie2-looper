@@ -103,6 +103,13 @@ resonator, the loop is filtered before it excites the resonator.
 LEDs: a full audio buffer switches to playback by itself and blinks that side red/white;
 each audio loop restart flashes the side purple (white in Cave mode).
 
+**Master low cut and compressor.** The codec (AC101) also filters and compresses the whole
+output, at no cost to the audio processing: a low cut (off or 20–1000 Hz, 6 dB/octave) and a
+compressor (threshold −40–0 dBFS, ratio off or 2:1–20:1, makeup 0–12 dB, attack 1–200 ms,
+release 10–2000 ms). Set them in the Loop Monitor's Master sliders (it also shows an estimate of
+the compressor's gain reduction) or over USB serial; for now they are runtime only (off at
+power-on). See [`DUAL_LOOPER.md`](DUAL_LOOPER.md).
+
 ## Loop Monitor
 
 ![Loop Monitor](doc/images/loop-monitor.png)
