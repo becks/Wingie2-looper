@@ -156,7 +156,7 @@
     canvas.roll { height: 150px; }
 
     .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); }
-    .stats b { color: var(--text); font-weight: 600; }
+    .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
     /* A value the player just changed stays red briefly, then fades back. */
     .meta b, .stats b { transition: color 700ms ease-out; }
     .meta b.changed, .stats b.changed { color: var(--rec); transition: none; }
@@ -327,10 +327,12 @@
           <span>Length <b data-audio-length>–</b></span>
           <span>Position <b data-audio-position>–</b></span>
           <span>Speed <b data-speed>–</b></span>
-          <span data-level-text>Level <b data-level>–</b></span>
-          <label class="control" data-loop-level-wrap hidden title="Loop level (MIDI CC 82; panel: G#/A# among the looper keys). Back to 100% at power-on.">Level <input type="range" min="0" max="100" step="1" data-loop-level aria-label="Loop level"> <b data-loop-level-value>–</b></label>
           <span>Direction <b data-direction>–</b></span>
           <span data-window-wrap hidden title="Playback window: drag its edges on the waveform (MIDI CC 90/91). A new recording or clear plays the whole loop again; runtime only.">Window <b data-window>–</b> <button type="button" data-window-reset>Whole loop</button></span>
+        </div>
+        <div class="stats">
+          <span data-level-text>Level <b data-level>–</b></span>
+          <label class="control" data-loop-level-wrap hidden title="Loop level (MIDI CC 82; panel: G#/A# among the looper keys). Back to 100% at power-on.">Level <input type="range" min="0" max="100" step="1" data-loop-level aria-label="Loop level"> <b data-loop-level-value>–</b></label>
           <label class="control" data-sos-wrap hidden title="Sound on sound: share of the loop kept on each overdub pass (MIDI CC 83). Back to 80% at power-on.">SOS <input type="range" min="0" max="100" step="1" data-sos aria-label="Sound on sound"> <b data-sos-value>–</b></label>
         </div>
         <div class="speed-steps" data-speed-steps hidden role="group" aria-label="Speed steps" title="Speed in pure-ratio steps (MIDI CC 86). Speed also changes pitch and loop duration."></div>
