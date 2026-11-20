@@ -60,6 +60,7 @@ local has_keys = false    -- firmware has key_target (the keys can play the loop
 local has_gate_modes = false  -- looper_gate 0-3 (off, hold, one-shot, trigger)
 local has_reverse = false     -- set_param looper_reverse
 local has_filter_target = false  -- set_param filter_target
+local has_master = false      -- master low cut and compressor in the codec
 
 -- device model
 local status = nil
@@ -160,8 +161,8 @@ local function hello()
     if ok and r.device == "Wingie2" then
       connected = true
       firmware = r.firmware or "?"
-      has_state, has_window, has_filter, has_keys, has_gate_modes, has_reverse, has_filter_target =
-        false, false, false, false, false, false, false
+      has_state, has_window, has_filter, has_keys, has_gate_modes, has_reverse, has_filter_target, has_master =
+        false, false, false, false, false, false, false, false
       for _, c in ipairs(r.capabilities or {}) do
         if c == "looper_state" then has_state = true end
         if c == "looper_window" then has_window = true end
@@ -170,6 +171,7 @@ local function hello()
         if c == "gate_modes" then has_gate_modes = true end
         if c == "looper_reverse" then has_reverse = true end
         if c == "filter_target" then has_filter_target = true end
+        if c == "master_dynamics" then has_master = true end
       end
       say("")
       for _, s in ipairs(sides) do s.wave_length = -1 end
@@ -608,6 +610,37 @@ local ROWS = {
    get = function(st) return st.mono or 0 end,
    show = function(v) return v == 1 and "mono" or "stereo" end,
    step = function(v, d) return d > 0 and 1 or 0 end},
+  -- master low cut and compressor, in the codec (loop_status md); runtime only
+  {label = "low cut", name = "master_low_cut", shared = true, master = true,
+   get = function(st) return st.md and st.md[1] or 0 end,
+   show = function(v) return v <= 0 and "off" or string.format("%dHz", v) end,
+   -- a semitone per step, more when turned fast; below 20 Hz is off
+   step = function(v, d)
+     if v <= 0 then return d > 0 and 20 or 0 end
+     local hz = math.floor(v * 2 ^ (d * math.abs(d) / 12) + 0.5)
+     if hz == v then hz = v + (d > 0 and 1 or -1) end
+     return hz < 20 and 0 or math.min(hz, 1000)
+   end},
+  {label = "comp thresh", name = "comp_threshold", shared = true, master = true,
+   get = function(st) return st.md and st.md[2] or -20 end,
+   show = function(v) return string.format("%ddB", v) end,
+   step = function(v, d) return util.clamp(v + d, -40, 0) end},
+  {label = "comp ratio", name = "comp_ratio", shared = true, master = true,
+   get = function(st) return st.md and st.md[3] or 1 end,
+   show = function(v) return v <= 1 and "off" or string.format("%d:1", v) end,
+   step = function(v, d) return util.clamp(v + d, 1, 20) end},
+  {label = "comp makeup", name = "comp_makeup", shared = true, master = true,
+   get = function(st) return st.md and st.md[4] or 0 end,
+   show = function(v) return string.format("+%ddB", v) end,
+   step = function(v, d) return util.clamp(v + d, 0, 12) end},
+  {label = "comp attack", name = "comp_attack", shared = true, master = true,
+   get = function(st) return st.md and st.md[5] or 5 end,
+   show = function(v) return string.format("%dms", v) end,
+   step = function(v, d) return util.clamp(v + d * math.max(1, math.floor(v / 10)), 1, 200) end},
+  {label = "comp release", name = "comp_release", shared = true, master = true,
+   get = function(st) return st.md and st.md[6] or 200 end,
+   show = function(v) return string.format("%dms", v) end,
+   step = function(v, d) return util.clamp(v + d * math.max(10, math.floor(v / 10 / 10) * 10), 10, 2000) end},
 }
 local row_sel = 1
 -- The loop a LOOP page acts on (1 A, 2 B), nil on the other pages.
@@ -674,6 +707,10 @@ local function change_row(row, side, d)
   end
   if row.filter_target and not has_filter_target then
     say("flash firmware with filter_target", 2)
+    return
+  end
+  if row.master and not has_master then
+    say("flash firmware with master_dynamics", 2)
     return
   end
   if row.reverse and not has_reverse then
@@ -802,6 +839,24 @@ local SHARED_PARAMS = {
   {id = "looper_latch", name = "latch", kind = "binary",
    get = function(st) return st.latch and math.min(st.latch, 1) end},
   {id = "line_input_mono", name = "line in mono", kind = "binary", get = function(st) return st.mono end},
+  {id = "master_low_cut", name = "master low cut", kind = "control",
+   spec = function() return controlspec.new(0, 1000, "lin", 1, 0, "Hz") end,
+   get = function(st) return st.md and st.md[1] end},
+  {id = "comp_threshold", name = "comp threshold", kind = "control",
+   spec = function() return controlspec.new(-40, 0, "lin", 1, -20, "dB") end,
+   get = function(st) return st.md and st.md[2] end},
+  {id = "comp_ratio", name = "comp ratio", kind = "control",
+   spec = function() return controlspec.new(1, 20, "lin", 1, 1, ":1") end,
+   get = function(st) return st.md and st.md[3] end},
+  {id = "comp_makeup", name = "comp makeup", kind = "control",
+   spec = function() return controlspec.new(0, 12, "lin", 1, 0, "dB") end,
+   get = function(st) return st.md and st.md[4] end},
+  {id = "comp_attack", name = "comp attack", kind = "control",
+   spec = function() return controlspec.new(1, 200, "exp", 1, 5, "ms") end,
+   get = function(st) return st.md and st.md[5] end},
+  {id = "comp_release", name = "comp release", kind = "control",
+   spec = function() return controlspec.new(10, 2000, "exp", 1, 200, "ms") end,
+   get = function(st) return st.md and st.md[6] end},
 }
 
 -- Loop transport, as K2/K3 on the LOOP pages, and clear (MIDI CC 80 = 4).

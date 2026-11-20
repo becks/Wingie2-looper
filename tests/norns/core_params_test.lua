@@ -168,6 +168,7 @@ serial = {
         }
       end
       answer.lv = {"", "", "", ""}
+      answer.md = {device.master_low_cut or 0, -20, device.comp_ratio or 1, 0, 5, 200}
     elseif req.op == "loop_notes" then
       answer.events, answer.count, answer.revision = {}, 0, 0
     elseif req.op == "loop_wave" then
@@ -230,6 +231,10 @@ check(device.post[1] == 1, "loop post toggle")
 params:set("wingie_filter_target_b", 2)
 flush()
 check(device.filter_target[2] == 1, "filter on: option 2 -> loop only")
+params:set("wingie_comp_ratio", 4)
+params:set("wingie_master_low_cut", 120)
+flush()
+check(device.comp_ratio == 4 and device.master_low_cut == 120, "master params go to shared")
 params:set("wingie_pre_clip_gain", 0.66)
 flush()
 check(math.abs(device.pre_clip_gain - 0.66) < 1e-6, "shared pre clip gain")
